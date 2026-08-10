@@ -42,11 +42,12 @@ export class MockTikTokLiveConnector implements TikTokLiveConnector {
   private readonly statusHandlers = new Set<TikTokStatusHandler>();
 
   async connect(options: TikTokConnectOptions): Promise<void> {
+    const uniqueId = options.uniqueId ?? "mock_user";
     this.setStatus({
       ...this.status,
       state: "connected",
-      uniqueId: options.uniqueId,
-      roomId: `mock-room-${options.uniqueId}`,
+      uniqueId,
+      roomId: `mock-room-${uniqueId}`,
       connectedAt: new Date().toISOString(),
       errorCode: undefined,
       errorMessage: undefined
@@ -99,8 +100,9 @@ export class TikTokConnectorAdapter implements TikTokLiveConnector {
   private options: TikTokConnectOptions | null = null;
 
   async connect(options: TikTokConnectOptions): Promise<void> {
+    const uniqueId = options.uniqueId ?? "";
     this.options = options;
-    this.setStatus(createStatus("connecting", { uniqueId: options.uniqueId, reconnectAttempt: this.status.reconnectAttempt }));
+    this.setStatus(createStatus("connecting", { uniqueId, reconnectAttempt: this.status.reconnectAttempt }));
 
     try {
       const imported = (await import("tiktok-live-connector")) as {
@@ -108,7 +110,7 @@ export class TikTokConnectorAdapter implements TikTokLiveConnector {
         WebcastEvent?: Record<string, string>;
       };
 
-      this.connection = new imported.TikTokLiveConnection(options.uniqueId, {
+      this.connection = new imported.TikTokLiveConnection(uniqueId, {
         session: options.sessionId ? { cookie: `sessionid=${options.sessionId}` } : undefined,
         enableExtendedGiftInfo: options.enableExtendedGiftInfo,
         fetchRoomInfoOnConnect: options.fetchRoomInfoOnConnect

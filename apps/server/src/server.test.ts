@@ -662,6 +662,34 @@ describe("TikTok browser frame capture", () => {
 });
 
 describe("TikTok connector routes", () => {
+  it("does not schedule stale auto reconnects when replacing an active connector", async () => {
+    process.env.EFFECT_APP_API_KEY = apiKey;
+    const tempRoot = await mkdtemp(path.join(tmpdir(), "obs-effect-tiktok-replace-"));
+    const app = await createApp({ rootDir: tempRoot });
+
+    try {
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/tiktok/connect",
+        payload: { uniqueId: "mock_user", useMockConnector: true, autoReconnect: true }
+      });
+      const secondConnect = await app.inject({
+        method: "POST",
+        url: "/api/v1/tiktok/connect",
+        payload: { uniqueId: "mock_user", useMockConnector: true, autoReconnect: true }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      const status = await app.inject({ method: "GET", url: "/api/v1/tiktok/status" });
+
+      expect(secondConnect.statusCode).toBe(202);
+      expect(status.json().status).toMatchObject({ state: "connected", reconnectAttempt: 0 });
+    } finally {
+      await app.close();
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  }, 10000);
+
   it("accepts mock connector events and records them in event history", async () => {
     process.env.EFFECT_APP_API_KEY = apiKey;
     const tempRoot = await mkdtemp(path.join(tmpdir(), "obs-effect-tiktok-mock-"));

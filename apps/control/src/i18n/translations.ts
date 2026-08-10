@@ -141,7 +141,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "Font preview": "Font preview",
     "Use preset": "Use preset",
     "Using": "Using",
-    "Preset is now in use": "Preset is now in use"
+    "Preset is now in use": "Preset is now in use",
+    "TikFinity Connector - recommended": "TikFinity Connector - recommended",
+    "TikFinity Connector note": "TikFinity Connector is the recommended path. Start TikFinity Desktop on this computer, connect it to your live, then connect this app to ws://localhost:21213/.",
+    "tikfinityEndpointHelp": "Local WebSocket endpoint exposed by TikFinity Desktop. The default is ws://localhost:21213/."
   },
   ja: {
     "app.eyebrow": "OBSエフェクトアプリ",
@@ -768,10 +771,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "Library Connector": "ライブラリ接続",
     "Mock Connector": "モック接続",
     "Auto detect": "自動検出",
-    "Mock Connector mode only.": "モック接続モード専用です。"
+    "Mock Connector mode only.": "モック接続モード専用です。",
+    "TikFinity Connector - recommended": "TikFinity接続 - 推奨",
+    "TikFinity Connector note": "TikFinity接続が推奨方式です。このPCでTikFinity Desktopを起動し、配信へ接続してから、このアプリを ws://localhost:21213/ に接続します。",
+    "tikfinityEndpointHelp": "TikFinity Desktopが公開するローカルWebSocketエンドポイントです。標準は ws://localhost:21213/ です。"
     ,
-    "connectorModeHelp": "Browser Connectorは無料推奨方式です。Chrome/EdgeでTikTok LIVEを開き、CDPで通信を観測します。Library Connectorはライブラリ方式、Mock Connectorはテスト用です。",
-    "uniqueIdHelp": "配信者のTikTok IDです。ライブURLが https://www.tiktok.com/@sample_user/live の場合は sample_user を入力します。先頭の @ は不要です。",
-    "sessionIdHelp": "Library Connectorで認証が必要な場合だけ使うセッション情報です。Browser Connectorでは通常不要です。"
+    "connectorModeHelp": "TikFinity接続は推奨方式です。TikFinity DesktopのローカルWebSocketからイベントを受け取ります。Browser ConnectorはChrome/Edge通信を観測する方式、Library Connectorはライブラリ方式、Mock Connectorはテスト用です。",
+    "uniqueIdHelp": "配信者のTikTok IDです。TikFinity接続では未入力でも接続できます。ライブURLが https://www.tiktok.com/@sample_user/live の場合は sample_user を入力します。先頭の @ は不要です。",
+    "sessionIdHelp": "Library Connectorで認証が必要な場合だけ使うセッション情報です。TikFinity接続とBrowser Connectorでは通常不要です。"
   }
 };

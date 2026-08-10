@@ -97,7 +97,7 @@ function baseEvent(raw: RawRecord, type: NormalizedEvent["type"], data: Record<s
     user,
     data,
     metadata: {
-      connector: "tiktok-live-connector",
+      connector: isRecord(raw.tikfinityEnvelope) ? "tikfinity" : "tiktok-live-connector",
       rawEventType: rawType,
       deduplicationConfidence: text(raw.msgId) || text(raw.messageId) ? "high" : "medium"
     }

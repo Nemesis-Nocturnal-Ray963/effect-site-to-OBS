@@ -518,13 +518,16 @@ export interface ConnectionStatusMessage {
 }
 
 export interface TikTokConnectOptions {
-  uniqueId: string;
+  uniqueId?: string;
   sessionId?: string;
-  connectorMode?: "browser" | "library" | "mock";
+  connectorMode?: "tikfinity" | "browser" | "library" | "mock";
   enableExtendedGiftInfo?: boolean;
   fetchRoomInfoOnConnect?: boolean;
   autoReconnect?: boolean;
   useMockConnector?: boolean;
+  tikfinity?: {
+    endpointUrl?: string;
+  };
   browser?: {
     browserType?: "chrome" | "edge" | "auto";
     executablePath?: string;
@@ -558,7 +561,7 @@ export interface TikTokConnectionStatus {
   errorMessage?: string;
   lastError?: string;
   connector: {
-    mode: "mock" | "library" | "browser" | "unavailable";
+    mode: "tikfinity" | "mock" | "library" | "browser" | "unavailable";
     libraryName: string;
     libraryVersion?: string;
     license?: string;
@@ -572,7 +575,7 @@ export interface TikTokStatusMessage {
   createdAt: string;
 }
 
-export type RawCaptureSource = "tiktok-library" | "tiktok-mock";
+export type RawCaptureSource = "tiktok-tikfinity" | "tiktok-browser" | "tiktok-library" | "tiktok-mock";
 export type RawNormalizationStatus = "success" | "warning" | "failed" | "not-normalized";
 
 export interface TikTokRawEventCaptureSummary {
@@ -593,7 +596,7 @@ export interface TikTokRawEventCapture {
   connector: {
     name: string;
     version?: string;
-    mode: "library" | "mock";
+    mode: "tikfinity" | "browser" | "library" | "mock";
   };
   connection: {
     uniqueId?: string;

@@ -39,6 +39,8 @@ export class BrowserTikTokLiveConnector implements TikTokLiveConnector {
   private readonly rawHandlers = new Set<RawTikTokEventHandler>();
   private readonly statusHandlers = new Set<TikTokStatusHandler>();
   private readonly frameDecoder = new TikTokWebcastBrowserFrameDecoder();
+  private readonly expectedProcessExits = new WeakSet<ChildProcessWithoutNullStreams>();
+  private readonly expectedCdpCloses = new WeakSet<CdpClient>();
   private process: ChildProcessWithoutNullStreams | null = null;
   private cdp: CdpClient | null = null;
   private connectOptions: TikTokConnectOptions | null = null;
@@ -67,7 +69,9 @@ export class BrowserTikTokLiveConnector implements TikTokLiveConnector {
   }
 
   async connect(connectOptions: TikTokConnectOptions): Promise<void> {
+    const uniqueId = connectOptions.uniqueId ?? "";
     this.connectOptions = connectOptions;
+    this.sockets.clear();
     if (connectOptions.browser?.captureFrames === false) {
       this.options.frameStore.disable();
     } else {
@@ -83,7 +87,7 @@ export class BrowserTikTokLiveConnector implements TikTokLiveConnector {
       return;
     }
 
-    this.pageUrl = `https://www.tiktok.com/@${connectOptions.uniqueId.replace(/^@/, "")}/live`;
+    this.pageUrl = `https://www.tiktok.com/@${uniqueId.replace(/^@/, "")}/live`;
     this.setBrowserStatus(
       this.createBrowserStatus("browser-launching", port, profileDir, { browserType: executable.type, executablePath: executable.path })
     );
@@ -126,18 +130,14 @@ export class BrowserTikTokLiveConnector implements TikTokLiveConnector {
   }
 
   async disconnect(): Promise<void> {
-    this.cdp?.close();
-    this.cdp = null;
-    this.process?.kill();
-    this.process = null;
-    this.setStatus("disconnected");
-    this.setBrowserStatus({ ...this.browserStatus, state: "idle" });
+    await this.disconnectBrowser(true);
   }
 
   async reconnect(): Promise<void> {
     if (!this.connectOptions) return;
     const reconnectAttempt = this.status.reconnectAttempt + 1;
-    await this.disconnect();
+    this.setStatus("reconnecting", { reconnectAttempt });
+    await this.disconnectBrowser(false);
     this.status = { ...this.status, reconnectAttempt };
     await this.connect(this.connectOptions);
   }
@@ -173,8 +173,12 @@ export class BrowserTikTokLiveConnector implements TikTokLiveConnector {
       ...(headless ? ["--headless=new"] : []),
       url
     ];
-    this.process = spawn(executablePath, args, { windowsHide: false });
-    this.process.on("exit", () => {
+    const childProcess = spawn(executablePath, args, { windowsHide: false });
+    this.process = childProcess;
+    childProcess.on("exit", () => {
+      if (this.expectedProcessExits.has(childProcess)) {
+        return;
+      }
       this.setBrowserStatus({ ...this.browserStatus, state: "idle" });
       if (this.status.state !== "disconnected") this.setStatus("disconnected");
     });
@@ -196,21 +200,25 @@ export class BrowserTikTokLiveConnector implements TikTokLiveConnector {
   }
 
   private installCdpListeners(browserType: "chrome" | "edge", port: number): void {
-    this.cdp?.on("Network.webSocketCreated", (params: SocketCreatedParams) => {
+    const cdp = this.cdp;
+    cdp?.on("Network.webSocketCreated", (params: SocketCreatedParams) => {
       if (params.requestId && params.url) this.sockets.set(params.requestId, params.url);
       this.emitBrowserStatus();
     });
-    this.cdp?.on("Network.webSocketFrameReceived", (params: FrameParams) => {
+    cdp?.on("Network.webSocketFrameReceived", (params: FrameParams) => {
       this.captureFrame(browserType, port, params, "received");
     });
-    this.cdp?.on("Network.webSocketFrameSent", (params: FrameParams) => {
+    cdp?.on("Network.webSocketFrameSent", (params: FrameParams) => {
       this.captureFrame(browserType, port, params, "sent");
     });
-    this.cdp?.on("Page.loadEventFired", () => {
+    cdp?.on("Page.loadEventFired", () => {
       this.setBrowserStatus({ ...this.browserStatus, state: "live-page-ready" });
       this.setBrowserStatus({ ...this.browserStatus, state: "capturing" });
     });
-    this.cdp?.on("close", () => {
+    cdp?.on("close", () => {
+      if (cdp && this.expectedCdpCloses.has(cdp)) {
+        return;
+      }
       this.setBrowserStatus({ ...this.browserStatus, state: "error", errorCode: "BROWSER_CLOSED", errorMessage: "Browser CDP socket closed" });
     });
   }
@@ -315,6 +323,24 @@ export class BrowserTikTokLiveConnector implements TikTokLiveConnector {
 
   private emitStatus(): void {
     for (const handler of this.statusHandlers) handler(this.status);
+  }
+
+  private async disconnectBrowser(emitDisconnectedStatus: boolean): Promise<void> {
+    const cdp = this.cdp;
+    if (cdp) {
+      this.expectedCdpCloses.add(cdp);
+      cdp.close();
+    }
+    this.cdp = null;
+    if (this.process) {
+      this.expectedProcessExits.add(this.process);
+      this.process.kill();
+    }
+    this.process = null;
+    if (emitDisconnectedStatus) {
+      this.setStatus("disconnected");
+      this.setBrowserStatus({ ...this.browserStatus, state: "idle" });
+    }
   }
 }
 

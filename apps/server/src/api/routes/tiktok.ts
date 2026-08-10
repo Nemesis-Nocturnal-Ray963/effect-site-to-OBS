@@ -3,13 +3,18 @@ import { z } from "zod";
 import type { TikTokConnectionManager } from "../../tiktok/TikTokConnectionManager.js";
 
 const connectSchema = z.object({
-  uniqueId: z.string().min(1).max(120),
+  uniqueId: z.string().max(120).optional(),
   sessionId: z.string().max(500).optional(),
-  connectorMode: z.enum(["browser", "library", "mock"]).optional(),
+  connectorMode: z.enum(["tikfinity", "browser", "library", "mock"]).optional(),
   enableExtendedGiftInfo: z.boolean().optional(),
   fetchRoomInfoOnConnect: z.boolean().optional(),
   autoReconnect: z.boolean().optional(),
   useMockConnector: z.boolean().optional(),
+  tikfinity: z
+    .object({
+      endpointUrl: z.string().url().optional()
+    })
+    .optional(),
   browser: z
     .object({
       browserType: z.enum(["chrome", "edge", "auto"]).optional(),
@@ -19,6 +24,15 @@ const connectSchema = z.object({
       captureFrames: z.boolean().optional()
     })
     .optional()
+}).superRefine((value, context) => {
+  const mode = value.connectorMode ?? (value.useMockConnector ? "mock" : "library");
+  if (mode !== "tikfinity" && !value.uniqueId?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["uniqueId"],
+      message: "uniqueId is required for this connector mode"
+    });
+  }
 });
 
 export async function registerTikTokRoutes(app: FastifyInstance, manager: TikTokConnectionManager): Promise<void> {

@@ -2,6 +2,7 @@ import type { NormalizedEvent, TikTokConnectOptions, TikTokConnectionStatus } fr
 import type { TikTokLiveConnector } from "./TikTokLiveConnector.js";
 import { MockTikTokLiveConnector, TikTokConnectorAdapter } from "./TikTokConnectorAdapter.js";
 import { TikTokEventNormalizer } from "./TikTokEventNormalizer.js";
+import { TikFinityConnector } from "./TikFinityConnector.js";
 import { BrowserTikTokLiveConnector } from "./browser/BrowserTikTokLiveConnector.js";
 import type { BrowserConnectorStatus } from "@obs-effect/shared-types";
 import type { BrowserFrameStore } from "./browser/BrowserFrameStore.js";
@@ -27,26 +28,31 @@ export class TikTokConnectionManager {
   private currentOptions: TikTokConnectOptions | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private manualDisconnect = false;
+  private connectionGeneration = 0;
 
   constructor(options: TikTokConnectionManagerOptions) {
     this.options = options;
   }
 
   async connect(connectOptions: TikTokConnectOptions): Promise<void> {
-    await this.disconnect(false);
+    await this.replaceConnector();
     this.manualDisconnect = false;
     this.currentOptions = connectOptions;
-    this.connector = this.createConnector(connectOptions);
-    this.connector.onRawEvent((event) => this.handleRawEvent(event));
-    this.connector.onStatus((status) => this.handleStatus(status));
-    await this.connector.connect(connectOptions);
+    const generation = this.connectionGeneration;
+    const connector = this.createConnector(connectOptions);
+    this.connector = connector;
+    connector.onRawEvent((event) => this.handleRawEvent(event));
+    connector.onStatus((status) => this.handleStatus(status, generation));
+    await connector.connect(connectOptions);
   }
 
   async disconnect(manual = true): Promise<void> {
     this.manualDisconnect = manual;
     this.clearReconnect();
-    await this.connector?.disconnect();
+    const connector = this.connector;
     this.connector = null;
+    await connector?.disconnect();
+    this.connectionGeneration += 1;
   }
 
   async reconnect(): Promise<void> {
@@ -93,6 +99,7 @@ export class TikTokConnectionManager {
   private createConnector(connectOptions: TikTokConnectOptions): TikTokLiveConnector {
     const mode = connectOptions.connectorMode ?? (connectOptions.useMockConnector ? "mock" : "library");
     if (mode === "mock") return new MockTikTokLiveConnector();
+    if (mode === "tikfinity") return new TikFinityConnector();
     if (mode === "browser" && this.options.browser) {
       return new BrowserTikTokLiveConnector(this.options.browser);
     }
@@ -112,7 +119,11 @@ export class TikTokConnectionManager {
     }
   }
 
-  private handleStatus(status: TikTokConnectionStatus): void {
+  private handleStatus(status: TikTokConnectionStatus, generation: number): void {
+    if (generation !== this.connectionGeneration) {
+      return;
+    }
+
     this.options.onStatus(status);
     if (status.state === "error") {
       this.options.onError(status.errorMessage ?? "TikTok connector error", {
@@ -122,11 +133,11 @@ export class TikTokConnectionManager {
     }
 
     if (!this.manualDisconnect && this.currentOptions?.autoReconnect && (status.state === "error" || status.state === "disconnected")) {
-      this.scheduleReconnect(status.reconnectAttempt);
+      this.scheduleReconnect(status.reconnectAttempt, generation);
     }
   }
 
-  private scheduleReconnect(attempt: number): void {
+  private scheduleReconnect(attempt: number, generation: number): void {
     if (this.reconnectTimer) {
       return;
     }
@@ -134,6 +145,9 @@ export class TikTokConnectionManager {
     const seconds = Math.min(30, Math.max(1, 2 ** Math.min(attempt, 4)));
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      if (generation !== this.connectionGeneration) {
+        return;
+      }
       void this.reconnect();
     }, seconds * 1000);
   }
@@ -143,5 +157,21 @@ export class TikTokConnectionManager {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+  }
+
+  private async replaceConnector(): Promise<void> {
+    this.clearReconnect();
+    const connector = this.connector;
+    if (!connector) {
+      this.connectionGeneration += 1;
+      return;
+    }
+
+    this.connector = null;
+    this.connectionGeneration += 1;
+    const previousManualDisconnect = this.manualDisconnect;
+    this.manualDisconnect = true;
+    await connector.disconnect();
+    this.manualDisconnect = previousManualDisconnect;
   }
 }

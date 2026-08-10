@@ -87,7 +87,7 @@ export class TikTokRawCaptureService {
         connector: {
           name: status.connector.libraryName,
           version: status.connector.libraryVersion,
-          mode: status.connector.mode === "library" ? "library" : "mock"
+          mode: status.connector.mode === "tikfinity" || status.connector.mode === "browser" || status.connector.mode === "library" ? status.connector.mode : "mock"
         },
         connection: {
           uniqueId: status.uniqueId,

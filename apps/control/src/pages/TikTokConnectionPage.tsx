@@ -84,11 +84,14 @@ export function TikTokConnectionPage(): React.ReactElement {
   const setBrowserStatus = useConnectionStore((state) => state.setBrowserStatus);
   const [form, setForm] = React.useState<TikTokConnectOptions>({
     uniqueId: "",
-    connectorMode: "browser",
+    connectorMode: "tikfinity",
     autoReconnect: true,
     enableExtendedGiftInfo: true,
     fetchRoomInfoOnConnect: true,
     useMockConnector: false,
+    tikfinity: {
+      endpointUrl: "ws://localhost:21213/"
+    },
     browser: {
       browserType: "auto",
       debuggingPort: 9222,
@@ -112,12 +115,16 @@ export function TikTokConnectionPage(): React.ReactElement {
     try {
       const payload: TikTokConnectOptions = {
         ...form,
-        uniqueId: form.uniqueId.trim().replace(/^@/u, ""),
-        useMockConnector: form.connectorMode === "mock"
+        uniqueId: form.uniqueId?.trim().replace(/^@/u, "") || undefined,
+        useMockConnector: form.connectorMode === "mock",
+        tikfinity: {
+          ...form.tikfinity,
+          endpointUrl: form.tikfinity?.endpointUrl?.trim() || undefined
+        }
       };
       const status = await connectTikTok(payload);
       setTikTokStatus(status);
-      if (payload.uniqueId.trim()) {
+      if (payload.uniqueId?.trim()) {
         setUniqueIdHistory(saveUniqueIdHistory(payload.uniqueId));
       }
       setMessage(t("Connect request accepted"));
@@ -161,7 +168,7 @@ export function TikTokConnectionPage(): React.ReactElement {
                 <HelpTip text={t("connectorModeHelp")} />
               </span>
               <select
-                value={form.connectorMode ?? "library"}
+                value={form.connectorMode ?? "tikfinity"}
                 onChange={(event) =>
                   setForm({
                     ...form,
@@ -170,7 +177,8 @@ export function TikTokConnectionPage(): React.ReactElement {
                   })
                 }
               >
-                <option value="browser">{t("Browser Connector - free recommended")}</option>
+                <option value="tikfinity">{t("TikFinity Connector - recommended")}</option>
+                <option value="browser">{t("Browser Connector")}</option>
                 <option value="library">{t("Library Connector")}</option>
                 <option value="mock">{t("Mock Connector")}</option>
               </select>
@@ -191,6 +199,17 @@ export function TikTokConnectionPage(): React.ReactElement {
                   <option key={uniqueId} value={uniqueId} />
                 ))}
               </datalist>
+            </label>
+            <label>
+              <span className="field-label">
+                TikFinity WebSocket
+                <HelpTip text={t("tikfinityEndpointHelp")} />
+              </span>
+              <input
+                value={form.tikfinity?.endpointUrl ?? "ws://localhost:21213/"}
+                disabled={form.connectorMode !== "tikfinity"}
+                onChange={(event) => setForm({ ...form, tikfinity: { ...form.tikfinity, endpointUrl: event.target.value } })}
+              />
             </label>
             <label>
               <span className="field-label">
@@ -350,7 +369,10 @@ export function TikTokConnectionPage(): React.ReactElement {
         <div className="panel">
           <h3>{t("Connector notes")}</h3>
           <p className="empty-text">
-            {t("Browser")} Connector is the free recommended path. It opens Chrome/Edge with a dedicated profile and observes WebSocket frames through CDP.
+            {t("TikFinity Connector note")}
+          </p>
+          <p className="empty-text">
+            {t("Browser")} Connector opens Chrome/Edge with a dedicated profile and observes WebSocket frames through CDP.
           </p>
           <p className="empty-text">
             Library Connector remains available but may require an external signing provider. HTTP API input remains available as fallback.
