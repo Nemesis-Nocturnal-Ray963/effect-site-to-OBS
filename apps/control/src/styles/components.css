@@ -1,0 +1,162 @@
+.eyebrow {
+  margin-bottom: 4px;
+  color: #7dd3fc;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.app-header h1 {
+  font-size: 28px;
+}
+
+.icon-button {
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 8px;
+  background: #272927;
+}
+
+.icon-button span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  margin: 3px auto;
+  background: #f7f7f2;
+}
+
+.connection-badge {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "dot label"
+    "dot value";
+  column-gap: 8px;
+  align-items: center;
+  min-width: 118px;
+  padding: 8px 10px;
+  border: 1px solid #3a3a37;
+  border-radius: 8px;
+  background: #1e1f1d;
+}
+
+.status-dot {
+  grid-area: dot;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #8f9188;
+}
+
+.badge-label {
+  grid-area: label;
+  color: #aaada3;
+  font-size: 12px;
+}
+
+.connection-badge strong {
+  grid-area: value;
+  color: #f7f7f2;
+  font-size: 13px;
+}
+
+.connection-badge.connected .status-dot {
+  background: #22c55e;
+}
+
+.connection-badge.connected {
+  border-color: #2a7b45;
+}
+
+.connection-badge.connecting .status-dot,
+.connection-badge.reconnecting .status-dot,
+.connection-badge.planned .status-dot {
+  background: #facc15;
+}
+
+.connection-badge.error .status-dot,
+.connection-badge.authentication-required .status-dot,
+.connection-badge.rate-limited .status-dot {
+  background: #ef4444;
+}
+
+.connection-badge.disconnected .status-dot,
+.connection-badge.stream-offline .status-dot,
+.connection-badge.idle .status-dot {
+  background: #8f9188;
+}
+
+.panel,
+.effect-card {
+  border: 1px solid #303030;
+  border-radius: 8px;
+  background: #1e1f1d;
+}
+
+button:not(.icon-button):not(.sidebar-backdrop) {
+  min-width: 112px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 8px;
+  color: #111;
+  background: #f8fafc;
+  font-weight: 800;
+}
+
+button:not(.icon-button):not(.sidebar-backdrop):hover {
+  background: #bae6fd;
+}
+
+input,
+select {
+  min-height: 38px;
+  border: 1px solid #444641;
+  border-radius: 8px;
+  color: #f7f7f2;
+  background: #151515;
+  padding: 8px 10px;
+}
+
+input[type="color"] {
+  width: 58px;
+  padding: 4px;
+}
+
+.code-block {
+  display: block;
+  margin: 14px 0;
+  padding: 14px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  border-radius: 8px;
+  background: #111;
+  color: #bfdbfe;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.kv-list {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) 1fr;
+  gap: 10px 14px;
+  margin-top: 16px;
+}
+
+.kv-list span {
+  color: #a8a8a0;
+}
+
+.success-text {
+  margin-top: 12px;
+  color: #bbf7d0;
+}
+
+.error-text {
+  margin-top: 12px;
+  color: #fecaca;
+}

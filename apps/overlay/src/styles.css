@@ -1,0 +1,560 @@
+﻿html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+body {
+  pointer-events: none;
+}
+
+.overlay-stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.debug-panel {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 10;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.62);
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation-name: flash-pop;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+
+.runtime-object {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border: 3px solid rgba(255, 255, 255, 0.86);
+  border-radius: 50%;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.88), rgba(125, 211, 252, 0.9) 28%, rgba(14, 165, 233, 0.82) 62%, rgba(2, 6, 23, 0.82));
+  box-shadow: 0 12px 38px rgba(14, 165, 233, 0.45);
+  font: 700 15px/1 system-ui, sans-serif;
+  transform: translate(-50%, -50%) rotate(var(--object-rotate, 0deg)) scale(var(--object-scale, 1));
+}
+
+.runtime-object span {
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.54);
+}
+
+.falling-image-object {
+  width: 112px;
+  height: 112px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  will-change: transform;
+}
+
+.falling-image-object img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+
+.falling-image-object .runtime-object-hp {
+  position: absolute;
+  right: -10px;
+  bottom: -6px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 12px;
+}
+
+.pitching-machine-object,
+.pitching-ball-object,
+.pitching-impact-object {
+  position: absolute;
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.pitching-machine-object {
+  z-index: 10;
+  width: 150px;
+  height: 150px;
+  filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.45));
+  transform: translate(-50%, -50%) scale(var(--machine-scale, 1));
+  animation: pitching-machine-enter var(--machine-enter-ms, 420ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition:
+    opacity var(--machine-exit-ms, 520ms) ease-in,
+    transform var(--machine-exit-ms, 520ms) cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+.pitching-machine-object.exiting {
+  animation: pitching-machine-exit var(--machine-exit-ms, 520ms) cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+.pitching-machine-visual {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transform: rotate(var(--machine-visual-rotate, 0deg)) scaleX(var(--machine-visual-flip-x, 1));
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pitching-machine-media {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  transform-origin: center;
+}
+
+.pitching-machine-media.recoiling {
+  animation: pitching-machine-recoil 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pitching-machine-object img,
+.pitching-ball-object img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pitching-machine-object span {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  color: #111827;
+  background: #f8fafc;
+  font: 900 28px/1 system-ui, sans-serif;
+}
+
+.pitching-listener-name {
+  position: absolute;
+  z-index: 2;
+  min-width: 92px;
+  max-width: 260px;
+  padding: 7px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  border-radius: 999px;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34);
+  font: 800 18px/1.15 system-ui, sans-serif;
+  text-align: center;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pitching-machine-object.edge-left .pitching-listener-name {
+  left: 58%;
+  bottom: 78%;
+}
+
+.pitching-machine-object.edge-right .pitching-listener-name {
+  right: 58%;
+  bottom: 78%;
+}
+
+.pitching-machine-object.edge-top .pitching-listener-name,
+.pitching-machine-object.edge-bottom .pitching-listener-name {
+  left: 58%;
+  bottom: 78%;
+}
+
+.pitching-ball-object {
+  z-index: 8;
+  border-radius: 999px;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.38));
+}
+
+@keyframes pitching-machine-enter {
+  from {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--machine-enter-x, -38px)), calc(-50% + var(--machine-enter-y, 0px))) scale(calc(var(--machine-scale, 1) * 0.82));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(var(--machine-scale, 1));
+  }
+}
+
+@keyframes pitching-machine-exit {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(var(--machine-scale, 1));
+  }
+  30% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--machine-overshoot-x, 22px)), calc(-50% + var(--machine-overshoot-y, 0px))) scale(calc(var(--machine-scale, 1) * 1.04));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--machine-exit-x, -128px)), calc(-50% + var(--machine-exit-y, 0px))) scale(calc(var(--machine-scale, 1) * 0.82));
+  }
+}
+
+@keyframes pitching-machine-recoil {
+  0% {
+    transform: translateX(0) scale(1);
+  }
+  18% {
+    transform: translateX(-18px) scale(0.96);
+  }
+  58% {
+    transform: translateX(5px) scale(1.035);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+  }
+}
+
+.pitching-machine-object.edge-left {
+  --machine-enter-x: -56px;
+  --machine-enter-y: 0px;
+  --machine-overshoot-x: 22px;
+  --machine-overshoot-y: 0px;
+  --machine-exit-x: -128px;
+  --machine-exit-y: 0px;
+  --machine-visual-rotate: 0deg;
+  --machine-visual-flip-x: 1;
+}
+
+.pitching-machine-object.edge-right {
+  --machine-enter-x: 56px;
+  --machine-enter-y: 0px;
+  --machine-overshoot-x: -22px;
+  --machine-overshoot-y: 0px;
+  --machine-exit-x: 128px;
+  --machine-exit-y: 0px;
+  --machine-visual-rotate: 0deg;
+  --machine-visual-flip-x: -1;
+}
+
+.pitching-machine-object.edge-top {
+  --machine-enter-x: 0px;
+  --machine-enter-y: -56px;
+  --machine-exit-x: 0px;
+  --machine-exit-y: -96px;
+  --machine-visual-rotate: 90deg;
+  --machine-visual-flip-x: 1;
+}
+
+.pitching-machine-object.edge-bottom {
+  --machine-enter-x: 0px;
+  --machine-enter-y: 56px;
+  --machine-exit-x: 0px;
+  --machine-exit-y: 96px;
+  --machine-visual-rotate: 270deg;
+  --machine-visual-flip-x: 1;
+}
+
+.pitching-ball-object span {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 30%, #ffffff, #fde68a 24%, #f59e0b 58%, #7c2d12);
+}
+
+.pitching-impact-object {
+  z-index: 6;
+  border: 5px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  box-shadow:
+    0 0 34px rgba(125, 211, 252, 0.8),
+    inset 0 0 28px rgba(250, 204, 21, 0.65);
+}
+
+.simple-media {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  min-width: 120px;
+  min-height: 80px;
+  overflow: hidden;
+  transform: translate(-50%, -50%) scale(var(--simple-scale, 1));
+  animation-duration: var(--simple-duration, 3000ms);
+  animation-fill-mode: both;
+  pointer-events: none;
+}
+
+.gift-combo-text-object {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(var(--combo-scale, 1));
+  animation: gift-combo-appear var(--combo-appear-ms, 260ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.gift-combo-text-object.finishing {
+  animation: gift-combo-finish var(--combo-finish-ms, 520ms) ease-in both;
+}
+
+.gift-combo-text-object.deadline-warning {
+  animation: gift-combo-deadline-blink 360ms ease-in-out infinite;
+}
+
+.gift-combo-text-object span {
+  display: inline-block;
+  color: var(--combo-solid-color, #ffffff);
+  font-family: var(--combo-font-family, Impact, "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif);
+  font-size: var(--combo-font-size, 96px);
+  font-weight: var(--combo-font-weight, 900);
+  letter-spacing: var(--combo-letter-spacing, 0px);
+  line-height: 1;
+  white-space: nowrap;
+  paint-order: stroke fill;
+  -webkit-text-stroke: var(--combo-stroke-width, 6px) var(--combo-stroke-color, #000000);
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.gift-combo-text-object span.rainbow {
+  color: transparent;
+  background:
+    linear-gradient(
+      90deg,
+      var(--combo-cyan, #00e5ff) 0%,
+      var(--combo-white, #ffffff) 10%,
+      var(--combo-magenta, #ff2bd6) 20%,
+      var(--combo-yellow, #ffe600) 30%,
+      var(--combo-green, #7cff4f) 40%,
+      var(--combo-cyan, #00e5ff) 50%,
+      var(--combo-white, #ffffff) 60%,
+      var(--combo-magenta, #ff2bd6) 70%,
+      var(--combo-yellow, #ffe600) 80%,
+      var(--combo-green, #7cff4f) 90%,
+      var(--combo-cyan, #00e5ff) 100%
+    );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: gift-combo-rainbow var(--combo-rainbow-ms, 2000ms) linear infinite;
+}
+
+@keyframes gift-combo-appear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(calc(var(--combo-scale, 1) * 0.7));
+  }
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(calc(var(--combo-scale, 1) * 1.08));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(var(--combo-scale, 1));
+  }
+}
+
+@keyframes gift-combo-finish {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(var(--combo-scale, 1));
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(calc(var(--combo-scale, 1) * 1.15));
+  }
+}
+
+@keyframes gift-combo-rainbow {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes gift-combo-deadline-blink {
+  0%,
+  100% {
+    opacity: var(--combo-opacity, 1);
+  }
+  50% {
+    opacity: calc(var(--combo-opacity, 1) * 0.42);
+  }
+}
+
+.simple-media-image,
+.simple-media-video {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  max-width: 80vw;
+  max-height: 80vh;
+}
+
+.simple-media-image {
+  object-fit: contain;
+}
+
+.simple-media-video {
+  object-fit: contain;
+}
+
+.simple-media-text {
+  grid-area: 1 / 1;
+  max-width: min(80vw, 960px);
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
+}
+
+.simple-enter-fade {
+  animation-name: simple-media-fade;
+}
+
+.simple-enter-scale {
+  animation-name: simple-media-scale;
+}
+
+.simple-enter-slide-up {
+  animation-name: simple-media-slide-up;
+}
+
+.simple-enter-slide-down {
+  animation-name: simple-media-slide-down;
+}
+
+.simple-enter-slide-left {
+  animation-name: simple-media-slide-left;
+}
+
+.simple-enter-slide-right {
+  animation-name: simple-media-slide-right;
+}
+
+@keyframes flash-pop {
+  0% {
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 0.96;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes simple-media-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  12%,
+  88% {
+    opacity: 1;
+  }
+}
+
+@keyframes simple-media-scale {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(calc(var(--simple-scale, 1) * 0.82));
+  }
+
+  12%,
+  88% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(var(--simple-scale, 1));
+  }
+}
+
+@keyframes simple-media-slide-up {
+  0%,
+  100% {
+    opacity: 0;
+    translate: 0 28px;
+  }
+
+  12%,
+  88% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes simple-media-slide-down {
+  0%,
+  100% {
+    opacity: 0;
+    translate: 0 -28px;
+  }
+
+  12%,
+  88% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes simple-media-slide-left {
+  0%,
+  100% {
+    opacity: 0;
+    translate: 28px 0;
+  }
+
+  12%,
+  88% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes simple-media-slide-right {
+  0%,
+  100% {
+    opacity: 0;
+    translate: -28px 0;
+  }
+
+  12%,
+  88% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}

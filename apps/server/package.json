@@ -1,0 +1,24 @@
+{
+  "name": "@obs-effect/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.4",
+    "@fastify/websocket": "^11.0.1",
+    "@obs-effect/shared-types": "workspace:*",
+    "fastify": "^5.2.1",
+    "pino": "^9.6.0",
+    "tiktok-live-connector": "2.4.0",
+    "ws": "8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  }
+}
