@@ -371,6 +371,21 @@ describe("TikTokEventNormalizer", () => {
     expect(streakEnd.map((event) => event.type)).toEqual(["gift-streak-end"]);
     expect([...singleGift, ...streakStart, ...streakEnd].filter((event) => event.type === "gift")).toHaveLength(1);
   });
+
+  it("keeps custom TikFinity event names available for external-event triggers", () => {
+    const normalizer = new TikTokEventNormalizer();
+
+    const event = normalizer.normalize({
+      eventType: "tikfinity-scene-change",
+      tikfinityEnvelope: { event: "tikfinity-scene-change", data: { scene: "opening" } }
+    })[0];
+
+    expect(event).toMatchObject({
+      type: "custom",
+      metadata: { connector: "tikfinity", rawEventType: "tikfinity-scene-change" },
+      data: { eventType: "tikfinity-scene-change", rawEventType: "tikfinity-scene-change" }
+    });
+  });
 });
 
 describe("Gift catalog", () => {
@@ -1648,6 +1663,37 @@ describe("Overlay routes", () => {
       expect(streakEndHistory?.result.matchedActions).toEqual(["simple-media", "simple-media"]);
     } finally {
       await app.close();
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("matches custom TikFinity events against external-event preset triggers", async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), "obs-effect-tikfinity-custom-trigger-"));
+    const service = new EffectConfigurationService(EffectConfigurationJsonRepository.fromRoot(tempRoot), () => "2026-08-11T00:00:00.000Z");
+
+    try {
+      await service.create({
+        name: "TikFinity Custom",
+        effectDefinitionId: "simple-media",
+        presetId: "preset-1",
+        presetSlotId: "slot-1",
+        trigger: { mode: "any", conditions: [{ type: "external-event", eventType: "tikfinity-scene-change" }] }
+      });
+
+      const matches = await service.match({
+        schemaVersion: "1.0",
+        eventId: "tikfinity-custom-1",
+        source: "tiktok-direct",
+        platform: "tiktok",
+        type: "custom",
+        timestamp: "2026-08-11T00:00:00.000Z",
+        receivedAt: "2026-08-11T00:00:00.000Z",
+        data: { eventType: "tikfinity-scene-change" },
+        metadata: { connector: "tikfinity" }
+      });
+
+      expect(matches.map((configuration) => configuration.effectDefinitionId)).toEqual(["simple-media"]);
+    } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });

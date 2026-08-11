@@ -191,6 +191,6 @@ export class TikTokEventNormalizer {
       ];
     }
 
-    return [baseEvent(raw, "custom", { rawEventType: eventType })];
+    return [baseEvent(raw, "custom", { eventType, rawEventType: eventType })];
   }
 }
