@@ -10,11 +10,18 @@ function isRecord(value: unknown): value is RawRecord {
 }
 
 function text(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
+  return undefined;
 }
 
 function numberValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 function booleanValue(value: unknown): boolean {
@@ -24,6 +31,30 @@ function booleanValue(value: unknown): boolean {
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function imageUrlsFrom(value: unknown): string[] {
+  const urls = new Set<string>();
+
+  function visit(current: unknown): void {
+    if (typeof current === "string") {
+      if (/^https?:\/\//iu.test(current)) urls.add(current);
+      return;
+    }
+    if (!current || typeof current !== "object") return;
+    if (Array.isArray(current)) {
+      for (const item of current) visit(item);
+      return;
+    }
+    for (const [key, child] of Object.entries(current as RawRecord)) {
+      if (/^(imageUrl|iconUrl|pictureUrl|url|uri)$/iu.test(key) || /urlList|url_list|image|picture|giftPicture/iu.test(key)) {
+        visit(child);
+      }
+    }
+  }
+
+  visit(value);
+  return [...urls];
 }
 
 function nested(record: RawRecord, key: string): RawRecord {
@@ -159,6 +190,8 @@ export class TikTokEventNormalizer {
       const repeatCount = numberValue(raw.repeatCount) ?? numberValue(raw.repeat_count) ?? 1;
       const repeatEnd = booleanValue(raw.repeatEnd) || booleanValue(raw.repeat_end);
       const streakable = repeatCount > 1 || repeatEnd;
+      const giftImageUrls = [...new Set([...stringArray(raw.giftImageUrls), ...imageUrlsFrom(raw)])];
+      const primaryGiftImageUrl = text(raw.primaryGiftImageUrl) ?? giftImageUrls[0];
 
       if (streakable) {
         return [
@@ -170,8 +203,8 @@ export class TikTokEventNormalizer {
             giftName: text(raw.giftName) ?? text(raw.gift_name),
             repeatCount,
             diamondValuePerUnit: numberValue(raw.diamondValue) ?? numberValue(raw.diamond_value),
-            giftImageUrls: stringArray(raw.giftImageUrls),
-            primaryGiftImageUrl: text(raw.primaryGiftImageUrl),
+            giftImageUrls,
+            primaryGiftImageUrl,
             repeatEnd,
             timestampMs: timestampMs(raw)
           })
@@ -185,8 +218,8 @@ export class TikTokEventNormalizer {
           repeatCount,
           diamondValue: numberValue(raw.diamondValue) ?? numberValue(raw.diamond_value),
           diamondValueTotal: numberValue(raw.diamondValueTotal) ?? numberValue(raw.diamond_value_total),
-          giftImageUrls: stringArray(raw.giftImageUrls),
-          primaryGiftImageUrl: text(raw.primaryGiftImageUrl)
+          giftImageUrls,
+          primaryGiftImageUrl
         })
       ];
     }

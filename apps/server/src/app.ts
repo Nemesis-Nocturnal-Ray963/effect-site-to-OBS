@@ -189,11 +189,19 @@ export async function createApp(options: CreateAppOptions) {
     broadcastToControl(message);
   }
 
-  async function resolveEffectMedia(configuration: { media?: { imageAssetId?: string; videoAssetId?: string; audioAssetId?: string } }) {
+  async function resolveEffectMedia(
+    configuration: { effectDefinitionId?: string; visual?: { parameters?: Record<string, unknown> }; media?: { imageAssetId?: string; videoAssetId?: string; audioAssetId?: string } },
+    event?: NormalizedEvent
+  ) {
     const assets = await loadCatalog(rootDir);
     const byId = new Map(assets.map((asset) => [asset.id, asset]));
+    const configuredImageUrl = configuration.media?.imageAssetId ? byId.get(configuration.media.imageAssetId)?.contentUrl : undefined;
+    const eventImageUrl =
+      configuration.effectDefinitionId === "simple-media" && !configuredImageUrl
+        ? imageUrlFromEvent(configuration.visual?.parameters ?? {}, event)
+        : undefined;
     return {
-      imageUrl: configuration.media?.imageAssetId ? byId.get(configuration.media.imageAssetId)?.contentUrl : undefined,
+      imageUrl: configuredImageUrl ?? eventImageUrl,
       videoUrl: configuration.media?.videoAssetId ? byId.get(configuration.media.videoAssetId)?.contentUrl : undefined,
       audioUrl: configuration.media?.audioAssetId ? byId.get(configuration.media.audioAssetId)?.contentUrl : undefined
     };
@@ -288,7 +296,7 @@ export async function createApp(options: CreateAppOptions) {
         createdAt: now(),
         event,
         triggerType,
-        media: await resolveEffectMedia(configuration)
+        media: await resolveEffectMedia(configuration, event)
       })
     );
   }
@@ -909,6 +917,45 @@ export async function createApp(options: CreateAppOptions) {
   );
 
   return app;
+}
+
+function imageUrlFromEvent(parameters: Record<string, unknown>, event?: NormalizedEvent): string | undefined {
+  if (!event || parameters.imageSourceMode === "asset") return undefined;
+  const direct =
+    stringConfig(event.data.primaryGiftImageUrl) ??
+    firstStringConfig(event.data.giftImageUrls) ??
+    stringConfig(event.data.imageUrl) ??
+    stringConfig(event.data.pictureUrl) ??
+    firstStringConfig((event.data.giftPicture as Record<string, unknown> | undefined)?.urlList);
+  if (direct) return direct;
+  return firstImageUrl(event.data);
+}
+
+function firstImageUrl(value: unknown): string | undefined {
+  if (typeof value === "string") return /^https?:\/\//iu.test(value) ? value : undefined;
+  if (!value || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstImageUrl(item);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (/^(imageUrl|iconUrl|pictureUrl|url|uri)$/iu.test(key) || /urlList|url_list|image|picture|giftPicture/iu.test(key)) {
+      const found = firstImageUrl(child);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+function stringConfig(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function firstStringConfig(value: unknown): string | undefined {
+  return Array.isArray(value) ? value.find((item): item is string => typeof item === "string" && item.trim().length > 0) : undefined;
 }
 
 function numericConfig(value: unknown, fallback: number): number {

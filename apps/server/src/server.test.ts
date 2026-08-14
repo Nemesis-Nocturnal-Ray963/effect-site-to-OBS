@@ -836,6 +836,33 @@ describe("OverlayConnectionManager", () => {
     expect(sent.get("one")).toHaveLength(1);
     expect(sent.get("two")).toBeUndefined();
   });
+
+  it("replays recent effect messages when an overlay reconnects", () => {
+    const sent = new Map<string, ServerMessage[]>();
+    const manager = new OverlayConnectionManager({
+      registry: new OverlayRegistry(),
+      publicBaseUrl: () => "http://127.0.0.1:3190",
+      send: (client, message) => {
+        const id = (client as unknown as { id: string }).id;
+        sent.set(id, [...(sent.get(id) ?? []), message]);
+      },
+      onStatusChange: () => undefined,
+      replayWindowMs: 5000
+    });
+    const message: ServerMessage = {
+      type: "effect:play",
+      effectId: "simple-media",
+      targetOverlayId: 1,
+      instanceId: "during-startup",
+      createdAt: new Date().toISOString()
+    };
+    const overlayOne = Object.assign(new EventEmitter(), { id: "one" }) as never;
+
+    manager.broadcastToOverlay(1, message);
+    manager.addClient(1, overlayOne);
+
+    expect(sent.get("one")?.filter((item) => item.type === "effect:play")).toEqual([message]);
+  });
 });
 
 describe("Overlay routes", () => {

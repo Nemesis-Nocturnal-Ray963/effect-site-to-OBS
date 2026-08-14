@@ -15,16 +15,19 @@ interface OverlayConnectionManagerOptions {
   publicBaseUrl: () => string;
   send: (client: WebSocket, message: ServerMessage) => void;
   onStatusChange: () => void;
+  replayWindowMs?: number;
 }
 
 export class OverlayConnectionManager {
   private readonly states = new Map<OverlayId, OverlayConnectionState>();
+  private readonly recentEffectMessages = new Map<OverlayId, Array<{ message: ServerMessage; storedAt: number }>>();
   private readonly options: OverlayConnectionManagerOptions;
 
   constructor(options: OverlayConnectionManagerOptions) {
     this.options = options;
     for (const overlayId of overlayIds) {
       this.states.set(overlayId, { clients: new Set<WebSocket>() });
+      this.recentEffectMessages.set(overlayId, []);
     }
   }
 
@@ -35,6 +38,7 @@ export class OverlayConnectionManager {
     state.connectedAt ??= timestamp;
     state.lastConnectedAt = timestamp;
     this.options.send(client, this.statusMessage());
+    this.replayRecentEffects(overlayId, client);
     this.options.onStatusChange();
 
     client.on("close", () => {
@@ -55,6 +59,7 @@ export class OverlayConnectionManager {
   }
 
   broadcastToOverlay(overlayId: OverlayId, message: ServerMessage): void {
+    this.rememberRecentEffect(overlayId, message);
     const state = this.states.get(overlayId)!;
     for (const client of state.clients) {
       this.options.send(client, message);
@@ -93,5 +98,27 @@ export class OverlayConnectionManager {
 
   totalClients(): number {
     return this.statusList().reduce((total, status) => total + status.connectedClients, 0);
+  }
+
+  private rememberRecentEffect(overlayId: OverlayId, message: ServerMessage): void {
+    if (message.type !== "effect:play") return;
+    const now = Date.now();
+    const replayWindowMs = this.options.replayWindowMs ?? 5000;
+    const recent = this.recentEffectMessages.get(overlayId)!;
+    recent.push({ message, storedAt: now });
+    this.recentEffectMessages.set(
+      overlayId,
+      recent.filter((entry) => now - entry.storedAt <= replayWindowMs).slice(-20)
+    );
+  }
+
+  private replayRecentEffects(overlayId: OverlayId, client: WebSocket): void {
+    const now = Date.now();
+    const replayWindowMs = this.options.replayWindowMs ?? 5000;
+    const recent = this.recentEffectMessages.get(overlayId)!.filter((entry) => now - entry.storedAt <= replayWindowMs);
+    this.recentEffectMessages.set(overlayId, recent);
+    for (const entry of recent) {
+      this.options.send(client, entry.message);
+    }
   }
 }

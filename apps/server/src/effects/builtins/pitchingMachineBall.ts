@@ -105,10 +105,10 @@ export class PitchingMachineBallEffectService {
 
   async execute(configuration: EffectConfiguration, event?: NormalizedEvent): Promise<PitchingExecutionResult> {
     const assets = await loadCatalog(this.rootDir);
-    const machineAsset = findImageAsset(assets, configuration.media.imageAssetId);
+    const settings = normalizeSettings(configuration.visual.parameters);
+    const machineAsset = findImageAsset(assets, configuration.media.imageAssetId) ?? findImageAsset(assets, settings.ballAssetId) ?? firstImageAsset(assets);
     if (!machineAsset) return { spawnedObjects: [], skipped: true, reason: "machine image asset is required" };
 
-    const settings = normalizeSettings(configuration.visual.parameters);
     const ballAsset = findImageAsset(assets, settings.ballAssetId) ?? machineAsset;
     const launchAudioAsset = findAudioAsset(assets, settings.launchAudioAssetId) ?? findAudioAsset(assets, configuration.media.audioAssetId);
     const impactAudioAsset = findAudioAsset(assets, settings.impactAudioAssetId);
@@ -336,6 +336,10 @@ function findImageAsset(assets: AssetCatalogItem[], assetId: string | undefined)
 function findAudioAsset(assets: AssetCatalogItem[], assetId: string | undefined): AssetCatalogItem | null {
   if (!assetId) return null;
   return assets.find((asset) => asset.id === assetId && asset.kind === "audio") ?? null;
+}
+
+function firstImageAsset(assets: AssetCatalogItem[]): AssetCatalogItem | null {
+  return assets.find((asset) => asset.kind === "image") ?? null;
 }
 
 function normalizeSettings(parameters: Record<string, unknown>) {
