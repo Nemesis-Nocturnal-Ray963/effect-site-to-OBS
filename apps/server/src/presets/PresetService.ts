@@ -201,7 +201,7 @@ function normalizePresetSlotTrigger(effectDefinitionId: string | undefined, trig
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string | undefined): boolean {
-  return !!effectDefinitionId && ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image"].includes(effectDefinitionId);
+  return !!effectDefinitionId && ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game"].includes(effectDefinitionId);
 }
 
 function defaultTikTokGiftTrigger(effectDefinitionId: string | undefined): EffectTriggerGroup {

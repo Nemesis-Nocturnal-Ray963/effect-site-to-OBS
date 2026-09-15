@@ -36,6 +36,16 @@ export function DashboardPage(): React.ReactElement {
         <h2>{t("Dashboard")}</h2>
       </section>
 
+      <section className="action-panel dashboard-game-panel">
+        <div>
+          <h3>{t("Games")}</h3>
+          <p className="empty-text">{t("Open the game library for test play and OBS game pages.")}</p>
+        </div>
+        <button type="button" onClick={() => window.open("/game", "_blank", "noopener,noreferrer")}>
+          {t("Open game library")}
+        </button>
+      </section>
+
       <section className="metric-grid">
         <ConnectionBadge label={t("Server")} state={socketState} detail={socketState} />
         <ConnectionBadge

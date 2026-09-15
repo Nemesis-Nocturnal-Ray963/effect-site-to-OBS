@@ -41,6 +41,7 @@ import { EffectConfigurationService, effectMessageFromConfiguration } from "./ef
 import { FallingImageEffectService } from "./effects/builtins/fallingImage.js";
 import { GiftComboTextEffectService } from "./effects/builtins/giftComboText.js";
 import { PitchingMachineBallEffectService } from "./effects/builtins/pitchingMachineBall.js";
+import { PuyoGameEffectService } from "./effects/builtins/puyoGame.js";
 import { registerEffectRoutes } from "./api/routes/effects.js";
 import { TikTokRawEventStore } from "./tiktok/raw-capture/TikTokRawEventStore.js";
 import { TikTokRawCaptureService } from "./tiktok/raw-capture/TikTokRawCaptureService.js";
@@ -58,6 +59,7 @@ import { PresetJsonRepository } from "./presets/PresetJsonRepository.js";
 import { PresetService } from "./presets/PresetService.js";
 import { registerPresetRoutes } from "./api/routes/presets.js";
 import { registerSystemFontRoutes } from "./api/routes/systemFonts.js";
+import { registerGameIntegrationRoutes } from "./api/routes/gameIntegrations.js";
 import { appVersion, buildVersion, overlayBundleVersion, serverInstanceId } from "./version/buildVersion.js";
 
 interface CreateAppOptions {
@@ -149,6 +151,7 @@ export async function createApp(options: CreateAppOptions) {
   let fallingImageEffectService: FallingImageEffectService | null = null;
   let pitchingMachineBallEffectService: PitchingMachineBallEffectService | null = null;
   let giftComboTextEffectService: GiftComboTextEffectService | null = null;
+  let puyoGameEffectService: PuyoGameEffectService | null = null;
 
   app.addHook("onClose", async () => {
     eventCatalogService.close();
@@ -250,6 +253,7 @@ export async function createApp(options: CreateAppOptions) {
   fallingImageEffectService = new FallingImageEffectService(rootDir, runtimeInteractionService);
   pitchingMachineBallEffectService = new PitchingMachineBallEffectService(rootDir, runtimeInteractionService);
   giftComboTextEffectService = new GiftComboTextEffectService(rootDir, runtimeInteractionService, broadcastToControl);
+  puyoGameEffectService = new PuyoGameEffectService(runtimeInteractionService);
   timeTriggerService = new TimeTriggerService(rootDir, () => now(), {
     onFired: executeTimeTrigger,
     onChanged: (kind, trigger, log, triggerId) => {
@@ -287,6 +291,10 @@ export async function createApp(options: CreateAppOptions) {
     }
     if (configuration.effectDefinitionId === "gift-combo-text" && giftComboTextEffectService) {
       await giftComboTextEffectService.execute(configuration, event);
+      return;
+    }
+    if (configuration.effectDefinitionId === "puyo-game" && puyoGameEffectService) {
+      await puyoGameEffectService.execute(configuration, event);
       return;
     }
     overlayConnectionManager.broadcastToOverlay(
@@ -769,11 +777,13 @@ export async function createApp(options: CreateAppOptions) {
   await registerTimeTriggerRoutes(app, timeTriggerService);
   await registerAssetRoutes(app, rootDir);
   await registerSystemFontRoutes(app, rootDir);
+  await registerGameIntegrationRoutes(app, { rootDir, now });
   await registerPresetRoutes(app, presetService, effectConfigurationService);
   await registerEffectRoutes(app, effectConfigurationService, overlayConnectionManager, now, {
     executeFallingImage: (configuration) => fallingImageEffectService!.execute(configuration),
     executePitchingMachineBall: (configuration, event) => pitchingMachineBallEffectService!.execute(configuration, event),
     executeGiftComboText: (configuration, event) => giftComboTextEffectService!.execute(configuration, event),
+    executePuyoGame: (configuration, event) => puyoGameEffectService!.execute(configuration, event),
     resolveMedia: resolveEffectMedia
   });
   await registerRuntimeRoutes(app, runtimeInteractionService);
@@ -911,6 +921,14 @@ export async function createApp(options: CreateAppOptions) {
     }
     return reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")));
   });
+
+  app.get("/game", async (_request, reply) =>
+    reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")))
+  );
+
+  app.get("/game/*", async (_request, reply) =>
+    reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")))
+  );
 
   app.get("/control/*", async (_request, reply) =>
     reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/control/dist/index.html")))

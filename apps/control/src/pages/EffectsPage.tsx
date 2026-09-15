@@ -47,7 +47,7 @@ function newCondition(type: EffectTriggerCondition["type"]): EffectTriggerCondit
 
 function defaultTikTokTrigger(effectDefinitionId: string): EffectConfiguration["trigger"] | undefined {
   if (effectDefinitionId === "gift-combo-text") return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
-  if (["flash", "simple-media", "pitching-machine-ball", "falling-image"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
+  if (["flash", "simple-media", "pitching-machine-ball", "falling-image", "puyo-game"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
   return undefined;
 }
 

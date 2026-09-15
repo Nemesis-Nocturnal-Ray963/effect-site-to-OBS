@@ -3,6 +3,7 @@ import { fallingImageEffectDefinition } from "./builtins/fallingImage.js";
 import { flashEffectDefinition } from "./builtins/flash.js";
 import { giftComboTextEffectDefinition } from "./builtins/giftComboText.js";
 import { pitchingMachineBallEffectDefinition } from "./builtins/pitchingMachineBall.js";
+import { puyoGameEffectDefinition } from "./builtins/puyoGame.js";
 import { simpleMediaEffectDefinition } from "./builtins/simpleMedia.js";
 
 export const effectDefinitions: EffectDefinition[] = [
@@ -10,6 +11,7 @@ export const effectDefinitions: EffectDefinition[] = [
   fallingImageEffectDefinition,
   simpleMediaEffectDefinition,
   pitchingMachineBallEffectDefinition,
+  puyoGameEffectDefinition,
   giftComboTextEffectDefinition
 ];
 

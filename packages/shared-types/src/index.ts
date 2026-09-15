@@ -9,6 +9,7 @@
   | "speed-lines"
   | "falling-image"
   | "pitching-machine-ball"
+  | "puyo-game"
   | "gift-combo-text"
   | "simple-media"
   | "media-composite";
@@ -347,6 +348,7 @@ export type RuntimeObjectType =
   | "pitching-machine"
   | "pitching-ball"
   | "pitching-impact"
+  | "puyo-game"
   | "gift-combo-text"
   | "image"
   | "particle-emitter"

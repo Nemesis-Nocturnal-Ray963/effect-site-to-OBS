@@ -173,6 +173,13 @@
   padding: 22px;
 }
 
+.dashboard-game-panel {
+  border-color: rgba(103, 232, 249, 0.28);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(244, 63, 94, 0.08)),
+    #181917;
+}
+
 .effect-card p {
   color: #b7b7ad;
 }

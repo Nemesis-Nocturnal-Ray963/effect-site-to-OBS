@@ -83,6 +83,7 @@ export async function registerEffectRoutes(
     executeFallingImage?: (configuration: EffectConfiguration) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executePitchingMachineBall?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executeGiftComboText?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
+    executePuyoGame?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     resolveMedia?: (configuration: EffectConfiguration) => Promise<ResolvedEffectMedia>;
   }
 ): Promise<void> {
@@ -194,6 +195,18 @@ export async function registerEffectRoutes(
       return {
         accepted: true,
         triggeredEffects: ["gift-combo-text"],
+        targetOverlayId: configuration.targetOverlayId,
+        spawnedObjectCount: result.spawnedObjects.length
+      };
+    }
+    if (configuration.effectDefinitionId === "puyo-game" && options?.executePuyoGame) {
+      const result = await options.executePuyoGame(configuration);
+      if (result.skipped) {
+        return reply.code(400).send({ accepted: false, error: result.reason ?? "Puyo game could not be spawned" });
+      }
+      return {
+        accepted: true,
+        triggeredEffects: ["puyo-game"],
         targetOverlayId: configuration.targetOverlayId,
         spawnedObjectCount: result.spawnedObjects.length
       };
