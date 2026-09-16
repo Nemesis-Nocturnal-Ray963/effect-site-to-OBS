@@ -40,6 +40,14 @@ corepack pnpm build
 corepack pnpm --filter @obs-effect/server start
 ```
 
+## 設定を引き継ぐアップデート
+
+アプリのサーバーとTikTokブラウザを終了してから、`scripts\update.bat` を実行してください。Git版・ZIP版を自動判別し、設定・素材を含む `data` をバックアップして保持したまま、GitHubのmainからプログラムを更新します。
+
+更新の確認だけなら `scripts\update.bat --check` を実行します。完了後は `scripts\start-dev.bat` で起動し直してください。
+
+詳細は [アップデート手順と復旧について](docs/updating.md) を参照してください。
+
 ## URL
 
 - Control UI: http://127.0.0.1:3190/control

@@ -3,3 +3,7 @@ dist/
 coverage/
 *.log
 data/
+.updates/
+.env
+.env.*
+!.env.example
