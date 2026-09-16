@@ -1,4 +1,5 @@
 ﻿import React from "react";
+import { GiftPileControls } from "../components/GiftPileControls";
 import type {
   AssetCatalogItem,
   EffectConfiguration,
@@ -393,6 +394,7 @@ function SlotEditor(props: {
 
   return (
     <section className="panel preset-slot-detail">
+      {props.slot.effectDefinitionId === "gift-pile" ? <GiftPileControls overlayId={props.slot.targetOverlayId} /> : null}
       <div className="drawer-header">
         <div>
           <p className="eyebrow">{t("Preset Effect")}</p>
@@ -1036,10 +1038,10 @@ function normalizePresetEffectTrigger(effectDefinitionId: string, trigger: Effec
   if (trigger && hasTikTokGiftCondition) return trigger;
   return {
     mode: "any",
-    conditions: [{ type: "gift-any", triggerOn: effectDefinitionId === "gift-combo-text" ? "gift" : "streak-end" }]
+    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
   };
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string | undefined): boolean {
-  return !!effectDefinitionId && ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game"].includes(effectDefinitionId);
+  return !!effectDefinitionId && ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
 }

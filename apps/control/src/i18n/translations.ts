@@ -150,6 +150,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "tikfinityEndpointHelp": "Local WebSocket endpoint exposed by TikFinity Desktop. The default is ws://localhost:21213/."
   },
   ja: {
+    "Gift object size (px)": "ギフト物体の大きさ（px）",
+    "Maximum accumulated gifts": "蓄積するギフトの上限",
     "app.eyebrow": "OBSエフェクトアプリ",
     "app.title": "コントロール",
     "status.server": "サーバー",

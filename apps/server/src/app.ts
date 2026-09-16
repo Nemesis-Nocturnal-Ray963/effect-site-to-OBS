@@ -41,6 +41,7 @@ import { EffectConfigurationService, effectMessageFromConfiguration } from "./ef
 import { FallingImageEffectService } from "./effects/builtins/fallingImage.js";
 import { GiftComboTextEffectService } from "./effects/builtins/giftComboText.js";
 import { PitchingMachineBallEffectService } from "./effects/builtins/pitchingMachineBall.js";
+import { GiftPileEffectService } from "./effects/builtins/giftPile.js";
 import { PuyoGameEffectService } from "./effects/builtins/puyoGame.js";
 import { registerEffectRoutes } from "./api/routes/effects.js";
 import { TikTokRawEventStore } from "./tiktok/raw-capture/TikTokRawEventStore.js";
@@ -151,6 +152,7 @@ export async function createApp(options: CreateAppOptions) {
   let fallingImageEffectService: FallingImageEffectService | null = null;
   let pitchingMachineBallEffectService: PitchingMachineBallEffectService | null = null;
   let giftComboTextEffectService: GiftComboTextEffectService | null = null;
+  let giftPileEffectService: GiftPileEffectService | null = null;
   let puyoGameEffectService: PuyoGameEffectService | null = null;
 
   app.addHook("onClose", async () => {
@@ -253,6 +255,7 @@ export async function createApp(options: CreateAppOptions) {
   fallingImageEffectService = new FallingImageEffectService(rootDir, runtimeInteractionService);
   pitchingMachineBallEffectService = new PitchingMachineBallEffectService(rootDir, runtimeInteractionService);
   giftComboTextEffectService = new GiftComboTextEffectService(rootDir, runtimeInteractionService, broadcastToControl);
+  giftPileEffectService = new GiftPileEffectService((overlayId, message) => overlayConnectionManager.broadcastToOverlay(overlayId, message));
   puyoGameEffectService = new PuyoGameEffectService(runtimeInteractionService);
   timeTriggerService = new TimeTriggerService(rootDir, () => now(), {
     onFired: executeTimeTrigger,
@@ -281,6 +284,10 @@ export async function createApp(options: CreateAppOptions) {
     event: NormalizedEvent,
     triggerType?: string
   ): Promise<void> {
+    if (configuration.effectDefinitionId === "gift-pile" && giftPileEffectService) {
+      giftPileEffectService.execute(configuration, event);
+      return;
+    }
     if (configuration.effectDefinitionId === "falling-image" && fallingImageEffectService) {
       await fallingImageEffectService.execute(configuration, event);
       return;
@@ -783,10 +790,17 @@ export async function createApp(options: CreateAppOptions) {
     executeFallingImage: (configuration) => fallingImageEffectService!.execute(configuration),
     executePitchingMachineBall: (configuration, event) => pitchingMachineBallEffectService!.execute(configuration, event),
     executeGiftComboText: (configuration, event) => giftComboTextEffectService!.execute(configuration, event),
+    executeGiftPile: (configuration) => giftPileEffectService!.execute(configuration),
     executePuyoGame: (configuration, event) => puyoGameEffectService!.execute(configuration, event),
     resolveMedia: resolveEffectMedia
   });
   await registerRuntimeRoutes(app, runtimeInteractionService);
+  app.delete("/api/v1/overlays/:overlayId/gift-pile", async (request, reply) => {
+    const overlayId = parseOverlayId((request.params as { overlayId: string }).overlayId);
+    if (!overlayId) return reply.code(404).send({ error: "Overlay not found" });
+    giftPileEffectService!.clear(overlayId);
+    return { cleared: true, overlayId };
+  });
   await registerRawCaptureRoutes(app, rawCaptureService);
   await registerTikTokBrowserRoutes(app, tiktokManager, browserFrameStore, {
     onFrameCleared: () =>

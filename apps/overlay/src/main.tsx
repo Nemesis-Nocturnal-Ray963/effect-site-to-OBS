@@ -19,6 +19,7 @@ import {
   type PuyoGameState,
   type PuyoPair
 } from "./puyoEngine";
+import { GiftPileLayer, type GiftPileHandle } from "./GiftPileLayer";
 import "./styles.css";
 
 const CURRENT_BUILD_VERSION = ((import.meta as ImportMeta & { env?: { VITE_BUILD_VERSION?: string } }).env?.VITE_BUILD_VERSION) ?? "dev";
@@ -784,6 +785,7 @@ function createStandalonePuyoObject(): RuntimeEffectObject {
 }
 
 function OverlayApp(): React.ReactElement {
+  const giftPileRef = React.useRef<GiftPileHandle>(null);
   const [flashes, setFlashes] = React.useState<Flash[]>([]);
   const [simpleMedia, setSimpleMedia] = React.useState<SimpleMediaPlayback[]>([]);
   const [snapshot, setSnapshot] = React.useState<RuntimeOverlaySnapshot | null>(null);
@@ -815,7 +817,9 @@ function OverlayApp(): React.ReactElement {
 
     function handleMessage(event: MessageEvent): void {
       const message = JSON.parse(event.data as string) as ServerMessage;
-      if (message.type === "effect:play" && message.effectId === "flash") {
+      if (message.type === "effect:play" && message.effectId === "gift-pile") {
+        giftPileRef.current?.receive(message);
+      } else if (message.type === "effect:play" && message.effectId === "flash") {
         const play = message as EffectPlayMessage;
         const color = typeof play.parameters?.color === "string" ? play.parameters.color : "#ffffff";
         const durationMs =
@@ -842,6 +846,7 @@ function OverlayApp(): React.ReactElement {
       } else if (message.type === "runtime:object-destroyed" && message.object.overlayId === overlayId) {
         setSnapshot((current) => removeObject(current, message.object.objectId));
       } else if (message.type === "runtime:overlay-cleared" && message.overlayId === overlayId) {
+        if (message.scope === "all") giftPileRef.current?.clear();
         setSnapshot((current) => (current ? { ...current, objects: [] } : current));
       } else if (message.type === "overlay:reload-required" && message.overlayId === overlayId) {
         scheduleOverlayReload(message.newBuildVersion, message.reloadDelayMs, message.reason);
@@ -880,6 +885,7 @@ function OverlayApp(): React.ReactElement {
       {simpleMedia.map((item) => (
         <SimpleMediaView key={item.id} item={item} />
       ))}
+      <GiftPileLayer ref={giftPileRef} />
       <FallingImagePhysicsLayer objects={(snapshot?.objects ?? []).filter(isRenderableFallingImage)} />
       <PitchingMachineLayer objects={(snapshot?.objects ?? []).filter(isRenderablePitchingObject)} />
       <PuyoGameLayer objects={(snapshot?.objects ?? []).filter(isRenderablePuyoGame)} />

@@ -1,4 +1,5 @@
 ﻿import React from "react";
+import { GiftPileControls } from "../components/GiftPileControls";
 import type { AssetCatalogItem, EffectConfiguration, EffectDefinition, EffectTriggerCondition, GiftCatalogRecord, OverlayId, OverlayStatus } from "@obs-effect/shared-types";
 import {
   createEffectConfiguration,
@@ -46,8 +47,8 @@ function newCondition(type: EffectTriggerCondition["type"]): EffectTriggerCondit
 }
 
 function defaultTikTokTrigger(effectDefinitionId: string): EffectConfiguration["trigger"] | undefined {
-  if (effectDefinitionId === "gift-combo-text") return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
-  if (["flash", "simple-media", "pitching-machine-ball", "falling-image", "puyo-game"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
+  if (["gift-combo-text", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
+  if (["flash", "simple-media", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
   return undefined;
 }
 
@@ -223,6 +224,7 @@ export function EffectsPage(): React.ReactElement {
                   {configuration ? `${triggerSummary(configuration)} / ${t("Overlay")} ${configuration.targetOverlayId}` : `${t("not set")} / ${t("Details")}`}
                 </p>
               </div>
+              {definition.id === "gift-pile" ? <GiftPileControls overlayId={configuration?.targetOverlayId ?? 1} /> : null}
               <span className={`overlay-status ${configuration?.enabled ? "active" : ""}`}>{configuration ? (configuration.enabled ? t("enabled") : t("disabled")) : t("not set")}</span>
               <div className="effect-config-actions">
                 <button
@@ -309,6 +311,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
   const isSimpleMedia = configuration.effectDefinitionId === "simple-media";
   const isPitchingMachineBall = configuration.effectDefinitionId === "pitching-machine-ball";
   const isGiftComboText = configuration.effectDefinitionId === "gift-combo-text";
+  const isGiftPile = configuration.effectDefinitionId === "gift-pile";
   const selectedOverlay = props.overlays.find((overlay) => overlay.overlayId === configuration.targetOverlayId);
 
   function patchCondition(next: EffectTriggerCondition): Promise<void> {
@@ -435,7 +438,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             {t("Once per user per live")}
           </label>
         ) : null}
-        {"triggerOn" in condition ? (
+        {"triggerOn" in condition && !isGiftPile ? (
           <label>
             {t("Gift timing")}
             <select value={condition.triggerOn} onChange={(event) => void patchCondition({ ...condition, triggerOn: event.target.value as "gift" })}>
@@ -449,6 +452,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
           {t("Duration")}
           <input
             type="number"
+            disabled={isGiftPile}
             min="50"
             step="50"
             value={configuration.playback.durationMs}
@@ -704,6 +708,13 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
               </select>
             </label>
             <NumberField label={t("Ball lifetime ms")} value={parameterNumber("ballLifetimeMs", parameterNumber("postImpactLifetimeMs", 4500))} min={100} max={60000} step={100} onChange={(value) => patchParameter("ballLifetimeMs", value)} />
+          </>
+        ) : null}
+        {isGiftPile ? (
+          <>
+            <NumberField label={t("Gift object size (px)")} value={parameterNumber("objectSizePx", 44)} min={16} max={160} onChange={(value) => patchParameter("objectSizePx", value)} />
+            <NumberField label={t("Maximum accumulated gifts")} value={parameterNumber("maxObjects", 1000)} min={1} max={2000} onChange={(value) => patchParameter("maxObjects", value)} />
+            <GiftPileControls overlayId={configuration.targetOverlayId} />
           </>
         ) : null}
         {isGiftComboText ? (

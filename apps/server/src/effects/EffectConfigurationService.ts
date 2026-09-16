@@ -176,7 +176,10 @@ export class EffectConfigurationService {
   async match(event: NormalizedEvent): Promise<EffectConfiguration[]> {
     const configurations = await this.list();
     return configurations.filter((configuration) =>
-      configuration.enabled && configuration.presetId && matchesTrigger(configuration.trigger, event, configuration.id, this.followedUserTriggers)
+      configuration.enabled && configuration.presetId && matchesTrigger(configuration.trigger,
+        configuration.effectDefinitionId === "gift-pile" && (event.type === "gift-streak-start" || event.type === "gift-streak-update")
+          ? { ...event, type: "gift" } : event,
+        configuration.id, this.followedUserTriggers)
     );
   }
 
@@ -309,13 +312,13 @@ function presetRuntimeTrigger(effectDefinitionId: string, trigger: EffectTrigger
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string): boolean {
-  return ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game"].includes(effectDefinitionId);
+  return ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
 }
 
 function defaultTikTokGiftTrigger(effectDefinitionId: string): EffectTriggerGroup {
   return {
     mode: "any",
-    conditions: [{ type: "gift-any", triggerOn: effectDefinitionId === "gift-combo-text" ? "gift" : "streak-end" }]
+    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
   };
 }
 

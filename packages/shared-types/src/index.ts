@@ -10,6 +10,7 @@
   | "falling-image"
   | "pitching-machine-ball"
   | "puyo-game"
+  | "gift-pile"
   | "gift-combo-text"
   | "simple-media"
   | "media-composite";

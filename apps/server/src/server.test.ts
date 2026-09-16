@@ -926,7 +926,7 @@ describe("Overlay routes", () => {
       });
       const overlays = await app.inject({ method: "GET", url: "/api/v1/overlays" });
 
-      expect(definitions.json().definitions.map((definition: { id: string }) => definition.id)).toEqual(["flash", "falling-image", "simple-media", "pitching-machine-ball", "puyo-game", "gift-combo-text"]);
+      expect(definitions.json().definitions.map((definition: { id: string }) => definition.id)).toEqual(["flash", "falling-image", "simple-media", "pitching-machine-ball", "puyo-game", "gift-combo-text", "gift-pile"]);
       expect(created.statusCode).toBe(201);
       expect(created.json().configuration).toMatchObject({ name: "Comment Flash", targetOverlayId: 2, enabled: true });
       expect(disabled.json().configuration).toMatchObject({ enabled: false });

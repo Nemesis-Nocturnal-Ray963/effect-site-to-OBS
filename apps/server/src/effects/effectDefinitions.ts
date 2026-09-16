@@ -6,13 +6,16 @@ import { pitchingMachineBallEffectDefinition } from "./builtins/pitchingMachineB
 import { puyoGameEffectDefinition } from "./builtins/puyoGame.js";
 import { simpleMediaEffectDefinition } from "./builtins/simpleMedia.js";
 
+import { giftPileEffectDefinition } from "./builtins/giftPile.js";
+
 export const effectDefinitions: EffectDefinition[] = [
   flashEffectDefinition,
   fallingImageEffectDefinition,
   simpleMediaEffectDefinition,
   pitchingMachineBallEffectDefinition,
   puyoGameEffectDefinition,
-  giftComboTextEffectDefinition
+  giftComboTextEffectDefinition,
+  giftPileEffectDefinition
 ];
 
 export function findEffectDefinition(effectDefinitionId: string): EffectDefinition | undefined {

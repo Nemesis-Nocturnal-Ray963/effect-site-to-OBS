@@ -201,12 +201,12 @@ function normalizePresetSlotTrigger(effectDefinitionId: string | undefined, trig
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string | undefined): boolean {
-  return !!effectDefinitionId && ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game"].includes(effectDefinitionId);
+  return !!effectDefinitionId && ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
 }
 
 function defaultTikTokGiftTrigger(effectDefinitionId: string | undefined): EffectTriggerGroup {
   return {
     mode: "any",
-    conditions: [{ type: "gift-any", triggerOn: effectDefinitionId === "gift-combo-text" ? "gift" : "streak-end" }]
+    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
   };
 }

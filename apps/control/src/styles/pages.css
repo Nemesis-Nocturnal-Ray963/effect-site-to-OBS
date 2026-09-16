@@ -210,6 +210,11 @@
   border-color: #7dd3fc;
 }
 
+.effect-config-row > .gift-pile-controls { grid-column: 1 / -1; order: 4; }
+.gift-pile-controls { display: grid; gap: 8px; }
+.gift-pile-controls button { justify-self: start; }
+.gift-pile-controls [role="status"] { font-size: 12px; }
+
 .effect-config-main {
   min-width: 0;
 }
