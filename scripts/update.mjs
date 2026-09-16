@@ -327,6 +327,15 @@ try {
 }
 
 export async function main(args = process.argv.slice(2)) {
+  const originalDirectory = process.cwd();
+  try {
+    return await runMain(args);
+  } finally {
+    if (existsSync(originalDirectory)) process.chdir(originalDirectory);
+  }
+}
+
+async function runMain(args) {
   if (args.includes("--help")) {
     console.log(
       "Usage: scripts\\update.bat [--check] [--git]\nDefault: download the public ZIP; Git is not required.\n--git: developer checkout only.\nClose the app before installing updates. See docs/updating.md."
@@ -348,6 +357,9 @@ export async function main(args = process.argv.slice(2)) {
   const root = await fs.realpath(
     index >= 0 ? args[index + 1] : path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
   );
+  // Direct Node launches can also start inside scripts. Release that directory
+  // before the ZIP installer renames program directories (Windows cwd lock).
+  process.chdir(root);
   const checkOnly = args.includes("--check");
   const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
   if (pkg.name !== "obs-effect-app")
@@ -436,10 +448,7 @@ export async function main(args = process.argv.slice(2)) {
     }
     await assertStopped(root);
     command(root, process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "corepack --version"], true);
-    const backup = path.join(
-      stateDir,
-      `${new Date().toISOString().replace(/[:.]/g, "-")}-${target.slice(0, 8)}`
-    );
+    const backup = path.join(stateDir, `u-${Date.now().toString(36)}`);
     await fs.mkdir(backup, { recursive: true });
     console.log(
       `Backup: ${backup}\nKeep the server and TikTok browser closed until this update finishes.`

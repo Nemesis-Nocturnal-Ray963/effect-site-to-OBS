@@ -61,6 +61,35 @@ function install(root, action) {
 }
 const read = (root, name) => fs.readFile(path.join(root, name), "utf8");
 
+test("real Windows launcher can replace scripts when started inside scripts", async (t) => {
+  const options = await fixture(t);
+  const launcher = await fs.readFile(new URL("./update.bat", import.meta.url));
+  await write(options.root, "scripts/update.bat", launcher);
+  await write(options.candidate, "scripts/update.bat", launcher);
+  const updaterUrl = new URL("./update.mjs", import.meta.url).href;
+  const shim = `
+import { applyUpdate } from ${JSON.stringify(updaterUrl)};
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+const options = ${JSON.stringify(options)};
+if (path.resolve(process.cwd()) !== path.resolve(options.root)) throw new Error('Launcher kept scripts as its current directory');
+await applyUpdate({...options, install(root, action) {
+  const files = action === 'install' ? ['node_modules/test.txt'] : ['apps/server/dist/server.js','apps/control/dist/index.html','apps/overlay/dist/index.html'];
+  for (const file of files) { mkdirSync(path.dirname(path.join(root,file)),{recursive:true}); writeFileSync(path.join(root,file),'new'); }
+}});
+`;
+  await write(options.root, "scripts/update.mjs", shim);
+  const result = spawnSync(process.env.ComSpec || "cmd.exe", ["/d", "/c", "update.bat < nul"], {
+    cwd: path.join(options.root, "scripts"),
+    encoding: "utf8",
+    windowsHide: true
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(await read(options.root, "apps/server/src/server.ts"), "new code");
+  assert.equal(await read(options.root, "scripts/update.mjs"), "// updater");
+  assert.equal(await read(options.root, "data/assets/image.png"), "user image");
+});
+
 test("ZIP update preserves settings, database, images and env; backs up old dependencies", async (t) => {
   const options = await fixture(t);
   const result = await applyUpdate({ ...options, install });
