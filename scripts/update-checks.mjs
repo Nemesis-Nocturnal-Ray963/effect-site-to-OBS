@@ -186,9 +186,43 @@ test("Git install failure returns to the old commit and restores offline depende
 test("local Git edits are rejected without network calls and the lock is released", async (t) => {
   const options = await gitFixture(t);
   await write(options.root, "apps/server/src/server.ts", "my uncommitted work");
-  await assert.rejects(main(["--root", options.root, "--check"]), /Local program changes/);
+  await assert.rejects(main(["--root", options.root, "--check", "--git"]), /Local program changes/);
   assert.equal(await read(options.root, "apps/server/src/server.ts"), "my uncommitted work");
   await assert.rejects(fs.access(path.join(options.root, ".updates/update.lock")));
+});
+
+test("standard update checks use the public ZIP even with unusable copied Git metadata", async (t) => {
+  const options = await fixture(t);
+  await write(options.root, ".git", "gitdir: C:/another-windows-user/not-readable");
+  let requests = 0;
+  t.mock.method(globalThis, "fetch", async (url, request) => {
+    assert.equal(
+      url,
+      "https://api.github.com/repos/Nemesis-Nocturnal-Ray963/effect-site-to-OBS/commits/main"
+    );
+    assert.equal(request.headers.Authorization, undefined);
+    requests++;
+    return new Response(JSON.stringify({ sha: "a".repeat(40) }), { status: 200 });
+  });
+  await main(["--root", options.root, "--check"]);
+  assert.equal(requests, 1);
+  assert.equal(await read(options.root, ".git"), "gitdir: C:/another-windows-user/not-readable");
+  assert.equal(await read(options.root, "apps/server/src/server.ts"), "old code");
+});
+
+test("standard ZIP installation never operates on a recipient's copied Git metadata", async (t) => {
+  const options = await fixture(t);
+  await write(options.root, ".git/config", "copied developer metadata");
+  await applyUpdate({
+    ...options,
+    install,
+    run() {
+      throw new Error("Git must not be called");
+    }
+  });
+  assert.equal(await read(options.root, ".git/config"), "copied developer metadata");
+  assert.equal(await read(options.root, "apps/server/src/server.ts"), "new code");
+  assert.equal(await read(options.root, "data/assets/image.png"), "user image");
 });
 
 test("Windows ZIP extraction works with spaces and Japanese paths and rejects traversal", async (t) => {

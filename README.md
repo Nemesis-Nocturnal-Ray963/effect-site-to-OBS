@@ -42,9 +42,11 @@ corepack pnpm --filter @obs-effect/server start
 
 ## 設定を引き継ぐアップデート
 
-アプリのサーバーとTikTokブラウザを終了してから、`scripts\update.bat` を実行してください。Git版・ZIP版を自動判別し、設定・素材を含む `data` をバックアップして保持したまま、GitHubのmainからプログラムを更新します。
+アプリのサーバーとTikTokブラウザを終了してから、`scripts\update.bat` を実行してください。GitHubのmainの公開ZIPからプログラムを更新します。GitやGitHubへのログインは不要で、コピー元のWindowsユーザーにも依存しません。設定・素材を含む `data` はバックアップして保持します。
 
 更新の確認だけなら `scripts\update.bat --check` を実行します。完了後は `scripts\start-dev.bat` で起動し直してください。
+
+開発者がGitの履歴を更新する場合のみ、`scripts\update.bat --git` を使ってください。通常更新はプログラムファイルを配布版へ置き換えるため、独自のコード変更がある作業フォルダーでは `--git` を使います。
 
 詳細は [アップデート手順と復旧について](docs/updating.md) を参照してください。
 

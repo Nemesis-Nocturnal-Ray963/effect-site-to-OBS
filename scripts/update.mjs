@@ -279,6 +279,10 @@ async function githubJson(url) {
     headers: { "User-Agent": "OBS-Effect-App-Updater", Accept: "application/vnd.github+json" },
     signal: AbortSignal.timeout(30000)
   });
+  if (response.status === 404)
+    throw new Error(
+      "The update repository is not publicly accessible (GitHub 404). Ask the distributor to publish the update source. Your settings were not changed."
+    );
   if (!response.ok) throw new Error(`GitHub request failed (${response.status}). Try again later.`);
   return response.json();
 }
@@ -325,7 +329,7 @@ try {
 export async function main(args = process.argv.slice(2)) {
   if (args.includes("--help")) {
     console.log(
-      "Usage: scripts\\update.bat [--check]\nClose the app before installing updates. See docs/updating.md."
+      "Usage: scripts\\update.bat [--check] [--git]\nDefault: download the public ZIP; Git is not required.\n--git: developer checkout only.\nClose the app before installing updates. See docs/updating.md."
     );
     return;
   }
@@ -334,7 +338,7 @@ export async function main(args = process.argv.slice(2)) {
       position++;
       continue;
     }
-    if (args[position] !== "--check")
+    if (!["--check", "--git"].includes(args[position]))
       throw new Error(`Unknown or incomplete argument: ${args[position]}`);
   }
   const [major, minor] = process.versions.node.split(".").map(Number);
@@ -367,10 +371,16 @@ export async function main(args = process.argv.slice(2)) {
   }
   await lock.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
   try {
-    const mode = existsSync(path.join(root, ".git")) ? "git" : "zip";
+    // Copies may contain .git owned by another Windows user or an SSH remote.
+    // Public ZIP updates do not depend on either, or on an installed Git executable.
+    const mode = args.includes("--git") ? "git" : "zip";
     let before = "unknown",
       target;
     if (mode === "git") {
+      if (!existsSync(path.join(root, ".git")))
+        throw new Error(
+          "--git requires a developer Git checkout. Run without --git for a distribution update."
+        );
       if (path.resolve(git(root, "rev-parse", "--show-toplevel")) !== root)
         throw new Error("The application must be the Git repository root.");
       if (git(root, "branch", "--show-current") !== "main")
