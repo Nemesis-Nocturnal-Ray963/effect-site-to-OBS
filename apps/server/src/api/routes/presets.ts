@@ -2,6 +2,16 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { PresetService, PresetInput, PresetSlotInput } from "../../presets/PresetService.js";
 import type { EffectConfigurationService } from "../../effects/EffectConfigurationService.js";
+import type { EffectConfiguration, NormalizedEvent } from "@obs-effect/shared-types";
+
+const presetTestSchema = z.object({
+  gift: z.object({
+    platformGiftId: z.string().min(1),
+    name: z.string().min(1),
+    coinValue: z.number().nonnegative(),
+    imageUrl: z.string().optional()
+  })
+});
 
 const presetSchema = z.object({
   name: z.string().min(1).optional(),
@@ -74,7 +84,12 @@ const slotSchema = z.object({
     .optional()
 });
 
-export async function registerPresetRoutes(app: FastifyInstance, service: PresetService, effectService: EffectConfigurationService): Promise<void> {
+export async function registerPresetRoutes(
+  app: FastifyInstance,
+  service: PresetService,
+  effectService: EffectConfigurationService,
+  options?: { executeTest?: (configuration: EffectConfiguration, event: NormalizedEvent) => Promise<void> }
+): Promise<void> {
   app.get("/api/v1/presets", async () => ({ presets: await service.list() }));
 
   app.post("/api/v1/presets", async (request, reply) => {
@@ -111,6 +126,18 @@ export async function registerPresetRoutes(app: FastifyInstance, service: Preset
     }
   });
 
+  app.post("/api/v1/presets/:presetId/test", async (request, reply) => {
+    const preset = await service.get((request.params as { presetId: string }).presetId);
+    if (!preset) return reply.code(404).send({ accepted: false, error: "Preset not found" });
+    const parsed = presetTestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ accepted: false, error: parsed.error.flatten() });
+    if (!options?.executeTest) return reply.code(503).send({ accepted: false, error: "Preset testing is unavailable" });
+    const event = createPresetGiftTestEvent(parsed.data.gift);
+    const configurations = await effectService.configurationsForPresetTest(preset);
+    for (const configuration of configurations) await options.executeTest(configuration, event);
+    return { accepted: true, testedEffectCount: configurations.length };
+  });
+
   app.post("/api/v1/presets/:presetId/select", async (request, reply) => {
     const preset = await service.moveToTop((request.params as { presetId: string }).presetId);
     if (!preset) return reply.code(404).send({ error: "Preset not found" });
@@ -138,4 +165,31 @@ export async function registerPresetRoutes(app: FastifyInstance, service: Preset
     if (!deleted) return reply.code(404).send({ deleted: false, error: "Preset slot not found" });
     return { deleted: true };
   });
+}
+
+export function createPresetGiftTestEvent(gift: { platformGiftId: string; name: string; coinValue: number; imageUrl?: string }): NormalizedEvent {
+  const timestamp = new Date().toISOString();
+  return {
+    schemaVersion: "1.0",
+    eventId: `preset-gift-test-${Date.now()}`,
+    source: "test",
+    platform: "tiktok",
+    type: "gift",
+    timestamp,
+    receivedAt: timestamp,
+    user: { id: "preset-test-user", displayName: "Preset Tester" },
+    data: {
+      giftId: gift.platformGiftId,
+      platformGiftId: gift.platformGiftId,
+      giftName: gift.name,
+      repeatCount: 1,
+      normalizedGiftQuantity: 1,
+      coinValue: gift.coinValue,
+      coinValueTotal: gift.coinValue,
+      diamondValue: gift.coinValue,
+      diamondValueTotal: gift.coinValue,
+      giftImageUrls: gift.imageUrl ? [gift.imageUrl] : undefined,
+      primaryGiftImageUrl: gift.imageUrl
+    }
+  };
 }

@@ -57,7 +57,13 @@ export class GiftExtractor {
     if (!platformGiftId) return null;
 
     const name = text(data.giftName) ?? text(data.gift_name) ?? text((data.gift as Record<string, unknown> | undefined)?.name);
-    const imageUrls = imageUrlsFrom(data);
+    const imageUrls = [
+      text(data.primaryGiftImageUrl),
+      ...imageUrlsFrom(data.giftImageUrls),
+      ...imageUrlsFrom(data.giftPicture),
+      ...imageUrlsFrom(data.gift),
+      ...imageUrlsFrom(data.extendedGiftInfo)
+    ].filter((url, index, all): url is string => Boolean(url) && all.indexOf(url) === index);
 
     const value = numberValue(data.coinValue) ?? numberValue(data.coin_value) ?? numberValue(data.diamondValue) ?? numberValue(data.diamond_value) ?? numberValue(data.diamondValueTotal);
 

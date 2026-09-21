@@ -169,6 +169,25 @@ export class EffectConfigurationService {
     return nextPresetConfigurations;
   }
 
+  async configurationsForPresetTest(preset: EffectPreset): Promise<EffectConfiguration[]> {
+    const configurations = await this.list();
+    const timestamp = this.now();
+    return preset.slots
+      .filter((slot) => slot.enabled && slot.effectDefinitionId)
+      .map((slot) => {
+        const libraryConfiguration = configurations.find(
+          (configuration) =>
+            !configuration.presetId &&
+            !configuration.presetSlotId &&
+            configuration.effectDefinitionId === slot.effectDefinitionId
+        );
+        return {
+          ...this.configurationFromPresetSlot(preset, slot, undefined, timestamp, libraryConfiguration),
+          enabled: true
+        };
+      });
+  }
+
   async removePresetConfigurations(presetId: string): Promise<void> {
     await this.repository.saveAll((await this.list()).filter((configuration) => configuration.presetId !== presetId));
   }

@@ -28,7 +28,6 @@ export const giftPileEffectDefinition: EffectDefinition = {
         type: "number",
         defaultValue: 44,
         min: 16,
-        max: 160,
         step: 1
       },
       {
@@ -67,19 +66,22 @@ export class GiftPileEffectService {
 
   execute(
     configuration: EffectConfiguration,
-    event?: NormalizedEvent
+    event?: NormalizedEvent,
+    catalogImageUrl?: string
   ): { spawnedObjectCount: number; skipped: boolean } {
     const quantity = event ? this.quantity(configuration, event) : 1;
     if (quantity <= 0) return { spawnedObjectCount: 0, skipped: true };
     const urls = [
       event?.data.primaryGiftImageUrl,
-      ...(Array.isArray(event?.data.giftImageUrls) ? event.data.giftImageUrls : []),
-      event?.data.imageUrl
+      ...(Array.isArray(event?.data.giftImageUrls) ? event.data.giftImageUrls : [])
     ];
     const eventImageUrl = urls.find(
       (url): url is string => typeof url === "string" && /^(https?:\/\/|\/(?!\/))/u.test(url)
     );
-    const imageUrl = resolveCoinImageUrl(configuration.visual.parameters, event) ?? eventImageUrl;
+    const imageUrl =
+      resolveCoinImageUrl(configuration.visual.parameters, event) ??
+      validImageUrl(catalogImageUrl) ??
+      eventImageUrl;
     const objectSizePx = resolveGiftObjectSize(configuration.visual.parameters, event);
     this.broadcast(configuration.targetOverlayId, {
       type: "effect:play",
@@ -227,6 +229,10 @@ function resolveCoinObjectSize(
 
 function clampSize(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value)
-    ? Math.round(Math.max(16, Math.min(500, value)))
+    ? Math.round(Math.max(16, value))
     : fallback;
+}
+
+function validImageUrl(value: unknown): string | undefined {
+  return typeof value === "string" && /^(https?:\/\/|\/(?!\/))/u.test(value) ? value : undefined;
 }

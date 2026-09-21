@@ -27,6 +27,7 @@ import {
   fetchSystemFonts,
   savePreset,
   selectPreset,
+  testPreset,
   updatePreset,
   updatePresetSlot,
   type EffectPresetSlotDraft,
@@ -313,9 +314,100 @@ export function PresetsPage(): React.ReactElement {
                 </section>
               )}
             </div>
+            <PresetTestPanel
+              preset={selectedPreset}
+              gifts={gifts}
+              onMessage={setMessage}
+            />
           </section>
         ) : null}
       </section>
+    </section>
+  );
+}
+
+function PresetTestPanel(props: {
+  preset: EffectPreset;
+  gifts: GiftCatalogRecord[];
+  onMessage: (message: string) => void;
+}): React.ReactElement {
+  const { t } = useI18n();
+  const [selectedGiftId, setSelectedGiftId] = React.useState("");
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const [sort, setSort] = React.useState<"lastSeenAt" | "coinValueAsc" | "coinValueDesc" | "name">("lastSeenAt");
+  const [minimumCoin, setMinimumCoin] = React.useState("");
+  const selectedGift = props.gifts.find((gift) => gift.platformGiftId === selectedGiftId);
+  const filteredGifts = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const minimum = minimumCoin === "" ? null : Number(minimumCoin);
+    return [...props.gifts]
+      .filter((gift) => {
+        const coin = giftCoinValue(gift);
+        if (minimum !== null && (!Number.isFinite(minimum) || coin === null || coin < minimum)) return false;
+        return !query || [gift.name, gift.platformGiftId, ...gift.aliases].some((value) => value.toLowerCase().includes(query));
+      })
+      .sort((left, right) => {
+        if (sort === "name") return left.name.localeCompare(right.name);
+        if (sort === "coinValueAsc") return (giftCoinValue(left) ?? Number.MAX_SAFE_INTEGER) - (giftCoinValue(right) ?? Number.MAX_SAFE_INTEGER);
+        if (sort === "coinValueDesc") return (giftCoinValue(right) ?? -1) - (giftCoinValue(left) ?? -1);
+        return new Date(right.lastSeenAt).getTime() - new Date(left.lastSeenAt).getTime();
+      });
+  }, [minimumCoin, props.gifts, search, sort]);
+
+  async function runTest(): Promise<void> {
+    if (!selectedGift) return;
+    try {
+      const result = await testPreset(props.preset.id, {
+        platformGiftId: selectedGift.platformGiftId,
+        name: selectedGift.name,
+        coinValue: giftCoinValue(selectedGift) ?? 0,
+        imageUrl: selectedGift.image.primaryUrl
+      });
+      props.onMessage(`${t("Preset test sent")}: ${result.testedEffectCount} ${t("effects")}`);
+    } catch (error) {
+      props.onMessage(error instanceof Error ? error.message : t("Preset test failed"));
+    }
+  }
+
+  return (
+    <section className="panel preset-test-panel">
+      <div>
+        <p className="eyebrow">{t("Test details")}</p>
+        <h3>{t("Preset effect test")}</h3>
+        <p className="empty-text">{t("Choose a gift and test every enabled effect in this preset.")}</p>
+      </div>
+      <div className={`preset-selected-gift ${selectedGift ? "" : "empty"}`}>
+        {selectedGift ? (
+          <><GiftImage gift={selectedGift} /><span><strong>{selectedGift.name}</strong><small>{t("Gift ID")} {selectedGift.platformGiftId} / {t("Coin")} {giftCoinText(selectedGift)}</small></span></>
+        ) : <span><strong>{t("No recorded gift selected")}</strong><small>{t("Choose a gift from the gift picker.")}</small></span>}
+      </div>
+      <div className="button-row">
+        <button type="button" onClick={() => setPickerOpen(true)}>{t("Choose recorded gift")}</button>
+        <button type="button" disabled={!selectedGift} onClick={() => void runTest()}>{t("Test preset with gift")}</button>
+      </div>
+      {pickerOpen ? (
+        <div className="preset-gift-picker-backdrop" role="dialog" aria-modal="true" aria-label={t("Choose recorded gift")}>
+          <section className="panel preset-gift-picker">
+            <div className="drawer-header"><div><p className="eyebrow">{t("Gift picker")}</p><h3>{t("Choose recorded gift")}</h3></div><button type="button" onClick={() => setPickerOpen(false)}>{t("Close")}</button></div>
+            <div className="preset-gift-picker-toolbar">
+              <label>{t("Search")}<input value={search} placeholder={t("name or gift id")} onChange={(event) => setSearch(event.target.value)} /></label>
+              <label>{t("Sort")}<select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="lastSeenAt">{t("Last Seen")}</option><option value="coinValueDesc">{t("Coin high to low")}</option><option value="coinValueAsc">{t("Coin low to high")}</option><option value="name">{t("Name")}</option></select></label>
+              <label>{t("Minimum coin")}<input type="number" min="0" value={minimumCoin} onChange={(event) => setMinimumCoin(event.target.value)} /></label>
+            </div>
+            <div className="preset-gift-picker-meta"><span>{filteredGifts.length} {t("gifts")}</span></div>
+            {filteredGifts.length === 0 ? <p className="empty-text">{t("No gifts recorded yet.")}</p> : (
+              <div className="preset-gift-tile-grid">
+                {filteredGifts.map((gift) => (
+                  <button key={gift.id} type="button" className={`preset-gift-tile ${gift.platformGiftId === selectedGiftId ? "selected" : ""}`} onClick={() => { setSelectedGiftId(gift.platformGiftId); setPickerOpen(false); }}>
+                    <GiftImage gift={gift} /><strong>{gift.name}</strong><span>{t("Coin")} {giftCoinText(gift)}</span><small>ID {gift.platformGiftId}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

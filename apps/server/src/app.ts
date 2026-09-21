@@ -331,7 +331,9 @@ export async function createApp(options: CreateAppOptions) {
       return;
     }
     if (configuration.effectDefinitionId === "gift-pile" && giftPileEffectService) {
-      giftPileEffectService.execute(configuration, event);
+      const giftId = String(event.data.giftId ?? event.data.platformGiftId ?? "").trim();
+      const catalogGift = giftId ? await giftCatalogService.getByPlatformGiftId(giftId) : null;
+      giftPileEffectService.execute(configuration, event, catalogGift?.image.primaryUrl);
       return;
     }
     if (configuration.effectDefinitionId === "falling-image" && fallingImageEffectService) {
@@ -831,7 +833,9 @@ export async function createApp(options: CreateAppOptions) {
   await registerAssetRoutes(app, rootDir);
   await registerSystemFontRoutes(app, rootDir);
   await registerGameIntegrationRoutes(app, { rootDir, now });
-  await registerPresetRoutes(app, presetService, effectConfigurationService);
+  await registerPresetRoutes(app, presetService, effectConfigurationService, {
+    executeTest: (configuration, event) => executeEffectConfiguration(configuration, event, "preset-test")
+  });
   await registerEffectRoutes(app, effectConfigurationService, overlayConnectionManager, now, {
     executeFallingImage: (configuration, event) => fallingImageEffectService!.execute(configuration, event),
     executePitchingMachineBall: (configuration, event) => pitchingMachineBallEffectService!.execute(configuration, event),

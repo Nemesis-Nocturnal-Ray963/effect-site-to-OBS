@@ -56,7 +56,6 @@ export function GiftPileCoinRulesEditor(props: {
             <input
               type="number"
               min="16"
-              max="500"
               step="1"
               value={rule.sizePx ?? ""}
               placeholder={t("Default")}
@@ -176,5 +175,5 @@ function clampCoin(value: number): number {
 }
 
 function clampSize(value: number): number {
-  return Math.round(Math.max(16, Math.min(500, Number.isFinite(value) ? value : 44)));
+  return Math.round(Math.max(16, Number.isFinite(value) ? value : 44));
 }

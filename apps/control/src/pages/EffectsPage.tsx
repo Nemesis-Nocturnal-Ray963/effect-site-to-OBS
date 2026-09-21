@@ -778,7 +778,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
         ) : null}
         {isGiftPile ? (
           <>
-            <NumberField label={t("Gift object size (px)")} value={parameterNumber("objectSizePx", 44)} min={16} max={160} onChange={(value) => patchParameter("objectSizePx", value)} />
+            <NumberField label={t("Gift object size (px)")} value={parameterNumber("objectSizePx", 44)} min={16} onChange={(value) => patchParameter("objectSizePx", value)} />
             <NumberField label={t("Maximum accumulated gifts")} value={parameterNumber("maxObjects", 1000)} min={1} max={2000} onChange={(value) => patchParameter("maxObjects", value)} />
             <GiftPileOverridesEditor
               gifts={props.gifts}

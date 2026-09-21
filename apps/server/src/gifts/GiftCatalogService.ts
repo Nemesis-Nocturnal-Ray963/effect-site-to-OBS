@@ -49,6 +49,10 @@ export class GiftCatalogService {
     return this.repository.getById(id);
   }
 
+  getByPlatformGiftId(platformGiftId: string): Promise<GiftCatalogRecord | null> {
+    return this.repository.getByPlatformGiftId("tiktok", platformGiftId);
+  }
+
   async createManual(input: { platformGiftId?: string; name: string; coinValue?: number | null; primaryImageUrl?: string | null }): Promise<GiftCatalogRecord> {
     const platformGiftId = input.platformGiftId?.trim() || `manual-${randomUUID()}`;
     const existing = await this.repository.getByPlatformGiftId("tiktok", platformGiftId);

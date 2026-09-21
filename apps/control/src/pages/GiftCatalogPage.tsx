@@ -1,9 +1,29 @@
 import React from "react";
-import type { GiftCatalogRecord, GiftCatalogStats, GiftImageCacheStatus } from "@obs-effect/shared-types";
+import type {
+  AssetCatalogItem,
+  GiftCatalogRecord,
+  GiftCatalogStats,
+  GiftImageCacheStatus
+} from "@obs-effect/shared-types";
 import { useI18n } from "../i18n/I18nProvider";
-import { createGift, fetchGiftStats, fetchGifts, updateGift } from "../services/httpApi";
+import {
+  createGift,
+  fetchAssets,
+  fetchGiftStats,
+  fetchGifts,
+  updateGift
+} from "../services/httpApi";
 
-const columns = ["Image", "Name", "Gift ID", "Coin", "First Seen", "Last Seen", "Seen", "Image Status"];
+const columns = [
+  "Image",
+  "Name",
+  "Gift ID",
+  "Coin",
+  "First Seen",
+  "Last Seen",
+  "Seen",
+  "Image Status"
+];
 
 function formatDate(value: string | null | undefined): string {
   return value ? new Date(value).toLocaleString() : "-";
@@ -20,15 +40,28 @@ function coinValue(gift: GiftCatalogRecord): number | null {
 export function GiftCatalogPage(): React.ReactElement {
   const { t } = useI18n();
   const [gifts, setGifts] = React.useState<GiftCatalogRecord[]>([]);
+  const [imageAssets, setImageAssets] = React.useState<AssetCatalogItem[]>([]);
   const [stats, setStats] = React.useState<GiftCatalogStats | null>(null);
   const [selected, setSelected] = React.useState<GiftCatalogRecord | null>(null);
   const [search, setSearch] = React.useState("");
-  const [sort, setSort] = React.useState<"lastSeenAt" | "name" | "seenCount" | "coinValue">("lastSeenAt");
+  const [sort, setSort] = React.useState<"lastSeenAt" | "name" | "seenCount" | "coinValue">(
+    "lastSeenAt"
+  );
   const [cacheStatus, setCacheStatus] = React.useState<"all" | GiftImageCacheStatus>("all");
   const [viewMode, setViewMode] = React.useState<"tile" | "table">("tile");
   const [status, setStatus] = React.useState("");
-  const [form, setForm] = React.useState({ name: "", coinValue: "", primaryImageUrl: "", isActive: true });
-  const [manualForm, setManualForm] = React.useState({ platformGiftId: "", name: "", coinValue: "", primaryImageUrl: "" });
+  const [form, setForm] = React.useState({
+    name: "",
+    coinValue: "",
+    primaryImageUrl: "",
+    isActive: true
+  });
+  const [manualForm, setManualForm] = React.useState({
+    platformGiftId: "",
+    name: "",
+    coinValue: "",
+    primaryImageUrl: ""
+  });
 
   const load = React.useCallback(async (): Promise<void> => {
     const [nextGifts, nextStats] = await Promise.all([
@@ -48,6 +81,12 @@ export function GiftCatalogPage(): React.ReactElement {
   React.useEffect(() => {
     void load().catch(() => setStatus(t("Could not load gift catalog")));
   }, [load, t]);
+
+  React.useEffect(() => {
+    void fetchAssets()
+      .then((assets) => setImageAssets(assets.filter((asset) => asset.kind === "image")))
+      .catch(() => setImageAssets([]));
+  }, []);
 
   React.useEffect(() => {
     if (!selected) return;
@@ -137,19 +176,75 @@ export function GiftCatalogPage(): React.ReactElement {
       <form className="panel form-grid" onSubmit={(event) => void handleManualCreate(event)}>
         <div>
           <h3>{t("Add gift manually")}</h3>
-          <p className="empty-text">{t("Gift ID is optional. The app creates an internal ID when it is unknown.")}</p>
+          <p className="empty-text">
+            {t("Gift ID is optional. The app creates an internal ID when it is unknown.")}
+          </p>
         </div>
-        <label>{t("Name")}<input required value={manualForm.name} onChange={(event) => setManualForm({ ...manualForm, name: event.target.value })} /></label>
-        <label>{t("Gift ID")}<input value={manualForm.platformGiftId} onChange={(event) => setManualForm({ ...manualForm, platformGiftId: event.target.value })} /></label>
-        <label>{t("Coin")}<input type="number" min="0" value={manualForm.coinValue} onChange={(event) => setManualForm({ ...manualForm, coinValue: event.target.value })} /></label>
-        <label>{t("Primary Image URL")}<input value={manualForm.primaryImageUrl} onChange={(event) => setManualForm({ ...manualForm, primaryImageUrl: event.target.value })} /></label>
+        <label>
+          {t("Name")}
+          <input
+            required
+            value={manualForm.name}
+            onChange={(event) => setManualForm({ ...manualForm, name: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("Gift ID")}
+          <input
+            value={manualForm.platformGiftId}
+            onChange={(event) =>
+              setManualForm({ ...manualForm, platformGiftId: event.target.value })
+            }
+          />
+        </label>
+        <label>
+          {t("Coin")}
+          <input
+            type="number"
+            min="0"
+            value={manualForm.coinValue}
+            onChange={(event) => setManualForm({ ...manualForm, coinValue: event.target.value })}
+          />
+        </label>
+        <label>
+          {t("Primary Image URL")}
+          <input
+            value={manualForm.primaryImageUrl}
+            onChange={(event) =>
+              setManualForm({ ...manualForm, primaryImageUrl: event.target.value })
+            }
+          />
+        </label>
+        <label>
+          {t("Choose image from Assets")}
+          <select
+            value={
+              imageAssets.find((asset) => asset.contentUrl === manualForm.primaryImageUrl)?.id ?? ""
+            }
+            onChange={(event) => {
+              const asset = imageAssets.find((item) => item.id === event.target.value);
+              setManualForm({ ...manualForm, primaryImageUrl: asset?.contentUrl ?? "" });
+            }}
+          >
+            <option value="">{t("Choose image")}</option>
+            {imageAssets.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="submit">{t("Add gift")}</button>
       </form>
 
       <form className="panel monitor-toolbar" onSubmit={(event) => void handleSearch(event)}>
         <label>
           {t("Search")}
-          <input value={search} placeholder={t("name or gift id")} onChange={(event) => setSearch(event.target.value)} />
+          <input
+            value={search}
+            placeholder={t("name or gift id")}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </label>
         <label>
           {t("Sort")}
@@ -162,7 +257,10 @@ export function GiftCatalogPage(): React.ReactElement {
         </label>
         <label>
           {t("Image Status")}
-          <select value={cacheStatus} onChange={(event) => setCacheStatus(event.target.value as typeof cacheStatus)}>
+          <select
+            value={cacheStatus}
+            onChange={(event) => setCacheStatus(event.target.value as typeof cacheStatus)}
+          >
             <option value="all">all</option>
             <option value="not-requested">not-requested</option>
             <option value="pending">pending</option>
@@ -172,7 +270,10 @@ export function GiftCatalogPage(): React.ReactElement {
         </label>
         <label>
           {t("View")}
-          <select value={viewMode} onChange={(event) => setViewMode(event.target.value as typeof viewMode)}>
+          <select
+            value={viewMode}
+            onChange={(event) => setViewMode(event.target.value as typeof viewMode)}
+          >
             <option value="tile">tile</option>
             <option value="table">table</option>
           </select>
@@ -185,8 +286,12 @@ export function GiftCatalogPage(): React.ReactElement {
 
       <div className="panel">
         <div className="table-meta">
-          <span>{gifts.length} {t("gifts")}</span>
-          <span>{t("Last discovered")}: {formatDate(stats?.lastDiscoveredAt)}</span>
+          <span>
+            {gifts.length} {t("gifts")}
+          </span>
+          <span>
+            {t("Last discovered")}: {formatDate(stats?.lastDiscoveredAt)}
+          </span>
         </div>
         {viewMode === "tile" ? (
           gifts.length === 0 ? (
@@ -194,12 +299,23 @@ export function GiftCatalogPage(): React.ReactElement {
           ) : (
             <div className="gift-tile-grid">
               {gifts.map((gift) => (
-                <button className="gift-tile" key={gift.id} type="button" onClick={() => setSelected(gift)}>
+                <button
+                  className="gift-tile"
+                  key={gift.id}
+                  type="button"
+                  onClick={() => setSelected(gift)}
+                >
                   <span className="gift-tile-image">
-                    {gift.image.primaryUrl ? <img src={gift.image.primaryUrl} alt="" loading="lazy" /> : <span>{t("No image")}</span>}
+                    {gift.image.primaryUrl ? (
+                      <img src={gift.image.primaryUrl} alt="" loading="lazy" />
+                    ) : (
+                      <span>{t("No image")}</span>
+                    )}
                   </span>
                   <strong>{gift.name}</strong>
-                  <span className="gift-tile-value">{t("Coin")} {valueText(coinValue(gift))}</span>
+                  <span className="gift-tile-value">
+                    {t("Coin")} {valueText(coinValue(gift))}
+                  </span>
                 </button>
               ))}
             </div>
@@ -223,7 +339,16 @@ export function GiftCatalogPage(): React.ReactElement {
                   gifts.map((gift) => (
                     <tr key={gift.id} onClick={() => setSelected(gift)}>
                       <td>
-                        {gift.image.primaryUrl ? <img className="gift-thumb" src={gift.image.primaryUrl} alt="" loading="lazy" /> : "-"}
+                        {gift.image.primaryUrl ? (
+                          <img
+                            className="gift-thumb"
+                            src={gift.image.primaryUrl}
+                            alt=""
+                            loading="lazy"
+                          />
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td>{gift.name}</td>
                       <td>{gift.platformGiftId}</td>
@@ -273,7 +398,10 @@ export function GiftCatalogPage(): React.ReactElement {
           <div className="form-grid">
             <label>
               {t("Name")}
-              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+              <input
+                value={form.name}
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+              />
             </label>
             <label>
               {t("Coin")}
@@ -286,10 +414,39 @@ export function GiftCatalogPage(): React.ReactElement {
             </label>
             <label>
               {t("Primary Image URL")}
-              <input value={form.primaryImageUrl} onChange={(event) => setForm({ ...form, primaryImageUrl: event.target.value })} />
+              <input
+                value={form.primaryImageUrl}
+                onChange={(event) => setForm({ ...form, primaryImageUrl: event.target.value })}
+              />
             </label>
+            <label>
+              {t("Choose image from Assets")}
+              <select
+                value={
+                  imageAssets.find((asset) => asset.contentUrl === form.primaryImageUrl)?.id ?? ""
+                }
+                onChange={(event) => {
+                  const asset = imageAssets.find((item) => item.id === event.target.value);
+                  setForm({ ...form, primaryImageUrl: asset?.contentUrl ?? "" });
+                }}
+              >
+                <option value="">{t("Choose image")}</option>
+                {imageAssets.map((asset) => (
+                  <option key={asset.id} value={asset.id}>
+                    {asset.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {form.primaryImageUrl ? (
+              <img className="gift-catalog-image-preview" src={form.primaryImageUrl} alt="" />
+            ) : null}
             <label className="checkbox-row">
-              <input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} />
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(event) => setForm({ ...form, isActive: event.target.checked })}
+              />
               {t("Active")}
             </label>
           </div>

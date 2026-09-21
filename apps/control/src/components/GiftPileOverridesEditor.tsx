@@ -86,7 +86,6 @@ export function GiftPileOverridesEditor(props: {
               <input
                 type="number"
                 min="16"
-                max="500"
                 step="1"
                 value={override.sizePx}
                 onChange={(event) =>
@@ -239,5 +238,5 @@ export function parseGiftSizeOverrides(value: unknown): GiftSizeOverride[] {
 }
 
 function clampSize(value: number): number {
-  return Math.round(Math.max(16, Math.min(500, Number.isFinite(value) ? value : 88)));
+  return Math.round(Math.max(16, Number.isFinite(value) ? value : 88));
 }

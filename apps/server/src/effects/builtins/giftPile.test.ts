@@ -60,7 +60,7 @@ describe("gift pile delivery", () => {
     expect(resolveGiftObjectSize(parameters, gift("gift", 1, "rose-event"))).toBe(120);
     const heart = gift("gift", 1, "heart-event");
     heart.data.giftId = "heart";
-    expect(resolveGiftObjectSize(parameters, heart)).toBe(500);
+    expect(resolveGiftObjectSize(parameters, heart)).toBe(999);
     const unknown = gift("gift", 1, "unknown-event");
     unknown.data.giftId = "unknown";
     expect(resolveGiftObjectSize(parameters, unknown)).toBe(44);
@@ -109,6 +109,15 @@ describe("gift pile delivery", () => {
     };
     service.execute(configured, gift("gift", 1, "sized"));
     expect(sent[0]?.parameters?.objectSizePx).toBe(132);
+  });
+
+  it("prefers the manually selected catalog image over event image candidates", () => {
+    const sent: EffectPlayMessage[] = [];
+    const service = new GiftPileEffectService((_id, message) => sent.push(message));
+    const event = gift("gift", 1, "catalog-image");
+    event.data.giftImageUrls = ["https://example.test/listener-avatar.png"];
+    service.execute(configuration, event, "/asset-files/selected-gift.png");
+    expect(sent[0]?.media?.imageUrl).toBe("/asset-files/selected-gift.png");
   });
 
   it("counts a 1 → 2 → 10 → end combo exactly once, independently of coin value", () => {

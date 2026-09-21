@@ -25,7 +25,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   diamondValue: z.number().int().nonnegative().nullable().optional(),
   coinValue: z.number().int().nonnegative().nullable().optional(),
-  primaryImageUrl: z.string().url().nullable().optional(),
+  primaryImageUrl: z.string().trim().max(4000).nullable().optional(),
   isActive: z.boolean().optional()
 });
 

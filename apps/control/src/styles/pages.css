@@ -266,6 +266,15 @@
 .gift-pile-override-gift span { display: grid; }
 .gift-pile-override-gift small { color: #9ca3af; }
 
+.gift-catalog-image-preview {
+  width: min(100%, 320px);
+  max-height: 240px;
+  object-fit: contain;
+  border: 1px solid #303030;
+  border-radius: 8px;
+  background: #10110f;
+}
+
 .gift-size-overrides .gift-pile-override-row {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
@@ -1591,6 +1600,11 @@ tbody tr:hover {
   gap: 10px;
   color: #a8a8a0;
   font-size: 13px;
+}
+
+.preset-test-panel {
+  display: grid;
+  gap: 14px;
 }
 
 .preset-gift-tile-grid {

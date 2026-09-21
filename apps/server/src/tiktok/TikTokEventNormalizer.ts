@@ -190,7 +190,12 @@ export class TikTokEventNormalizer {
       const repeatCount = numberValue(raw.repeatCount) ?? numberValue(raw.repeat_count) ?? 1;
       const repeatEnd = booleanValue(raw.repeatEnd) || booleanValue(raw.repeat_end);
       const streakable = repeatCount > 1 || repeatEnd;
-      const giftImageUrls = [...new Set([...stringArray(raw.giftImageUrls), ...imageUrlsFrom(raw)])];
+      const giftImageUrls = [
+        ...stringArray(raw.giftImageUrls),
+        ...imageUrlsFrom(raw.gift),
+        ...imageUrlsFrom(raw.giftPicture),
+        ...imageUrlsFrom(raw.extendedGiftInfo)
+      ].filter((url, index, all) => all.indexOf(url) === index);
       const primaryGiftImageUrl = text(raw.primaryGiftImageUrl) ?? giftImageUrls[0];
 
       if (streakable) {

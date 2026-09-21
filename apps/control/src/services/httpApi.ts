@@ -802,6 +802,20 @@ export async function savePreset(id: string): Promise<{ configurationCount: numb
   return { configurationCount: data.configurationCount ?? 0 };
 }
 
+export async function testPreset(
+  id: string,
+  gift: { platformGiftId: string; name: string; coinValue: number; imageUrl?: string }
+): Promise<{ testedEffectCount: number }> {
+  const response = await fetch(`/api/v1/presets/${encodeURIComponent(id)}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ gift })
+  });
+  const data = (await response.json()) as { accepted?: boolean; testedEffectCount?: number; error?: unknown };
+  if (!response.ok || !data.accepted) throw new Error(typeof data.error === "string" ? data.error : "Failed to test preset");
+  return { testedEffectCount: data.testedEffectCount ?? 0 };
+}
+
 export async function selectPreset(id: string): Promise<EffectPreset> {
   const response = await fetch(`/api/v1/presets/${encodeURIComponent(id)}/select`, { method: "POST" });
   if (!response.ok) throw new Error("Failed to select preset");
