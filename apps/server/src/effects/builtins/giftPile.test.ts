@@ -69,7 +69,7 @@ describe("gift pile delivery", () => {
     ).toBe(55);
   });
 
-  it("uses a coin-specific size before a gift-specific or default size", () => {
+  it("uses the exact gift size before the broader coin-specific or default size", () => {
     const event = gift("gift", 1, "coin-size");
     event.data.diamondValue = 25;
     expect(
@@ -81,7 +81,19 @@ describe("gift pile delivery", () => {
         },
         event
       )
+    ).toBe(90);
+    event.data.giftId = "another-gift";
+    expect(
+      resolveGiftObjectSize(
+        {
+          objectSizePx: 44,
+          giftSizeOverridesJson: '[{"giftId":"rose","sizePx":90}]',
+          coinImageRulesJson: '[{"coinValue":25,"sizePx":140}]'
+        },
+        event
+      )
     ).toBe(140);
+    event.data.giftId = "rose";
     expect(
       resolveGiftObjectSize(
         {

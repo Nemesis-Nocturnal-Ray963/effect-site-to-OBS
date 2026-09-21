@@ -180,6 +180,9 @@ export function PresetsPage(): React.ReactElement {
   async function patchSlot(patch: EffectPresetSlotDraft): Promise<void> {
     if (!selectedPreset || !selectedSlot) return;
     await updatePresetSlot(selectedPreset.id, selectedSlot.id, patch);
+    if (selectedPreset.enabled || activePresetIds.has(selectedPreset.id)) {
+      await savePreset(selectedPreset.id);
+    }
     await reload();
     setSelectedPresetId(selectedPreset.id);
     setSelectedSlotId(selectedSlot.id);

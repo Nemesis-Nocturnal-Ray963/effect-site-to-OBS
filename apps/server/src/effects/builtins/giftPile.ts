@@ -6,6 +6,7 @@ import type {
   NormalizedEvent,
   OverlayId
 } from "@obs-effect/shared-types";
+import { samePlatformGiftId } from "../../gifts/giftAliases.js";
 
 export const giftPileEffectDefinition: EffectDefinition = {
   id: "gift-pile",
@@ -147,7 +148,10 @@ export class GiftPileEffectService {
   }
 }
 
-export function resolveCoinImageUrl(parameters: Record<string, unknown>, event?: NormalizedEvent): string | undefined {
+export function resolveCoinImageUrl(
+  parameters: Record<string, unknown>,
+  event?: NormalizedEvent
+): string | undefined {
   if (!event || typeof parameters.coinImageRulesJson !== "string") return undefined;
   const coinValue = giftCoinValue(event);
   try {
@@ -161,7 +165,9 @@ export function resolveCoinImageUrl(parameters: Record<string, unknown>, event?:
         numeric((item as Record<string, unknown>).coinValue) === coinValue
     ) as Record<string, unknown> | undefined;
     const imageUrl = match?.imageUrl;
-    return typeof imageUrl === "string" && /^(https?:\/\/|\/(?!\/))/u.test(imageUrl) ? imageUrl : undefined;
+    return typeof imageUrl === "string" && /^(https?:\/\/|\/(?!\/))/u.test(imageUrl)
+      ? imageUrl
+      : undefined;
   } catch {
     return undefined;
   }
@@ -175,7 +181,11 @@ function giftCoinValue(event: NormalizedEvent): number {
   const perGift = Math.max(numeric(event.data.coinValue), numeric(event.data.diamondValue));
   if (perGift >= 0) return perGift;
   const total = Math.max(numeric(event.data.coinValueTotal), numeric(event.data.diamondValueTotal));
-  const count = Math.max(1, numeric(event.data.repeatCount), numeric(event.data.normalizedGiftQuantity));
+  const count = Math.max(
+    1,
+    numeric(event.data.repeatCount),
+    numeric(event.data.normalizedGiftQuantity)
+  );
   return total >= 0 ? total / count : -1;
 }
 
@@ -185,23 +195,28 @@ export function resolveGiftObjectSize(
 ): number {
   const fallback = clampSize(parameters.objectSizePx, 44);
   if (!event) return fallback;
-  const coinSize = resolveCoinObjectSize(parameters, event);
-  if (coinSize !== undefined) return coinSize;
   const giftId = String(event.data.giftId ?? event.data.platformGiftId ?? "").trim();
-  if (!giftId || typeof parameters.giftSizeOverridesJson !== "string") return fallback;
-  try {
-    const parsed = JSON.parse(parameters.giftSizeOverridesJson) as unknown;
-    if (!Array.isArray(parsed)) return fallback;
-    const match = parsed.find(
-      (item) =>
-        item &&
-        typeof item === "object" &&
-        String((item as Record<string, unknown>).giftId ?? "").trim() === giftId
-    ) as Record<string, unknown> | undefined;
-    return match ? clampSize(match.sizePx, fallback) : fallback;
-  } catch {
-    return fallback;
+  if (giftId && typeof parameters.giftSizeOverridesJson === "string") {
+    try {
+      const parsed = JSON.parse(parameters.giftSizeOverridesJson) as unknown;
+      if (Array.isArray(parsed)) {
+        const match = parsed.find(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            samePlatformGiftId(
+              event.platform,
+              String((item as Record<string, unknown>).giftId ?? ""),
+              giftId
+            )
+        ) as Record<string, unknown> | undefined;
+        if (match) return clampSize(match.sizePx, fallback);
+      }
+    } catch {
+      // Continue to the broader coin rule when the gift-specific setting is invalid.
+    }
   }
+  return resolveCoinObjectSize(parameters, event) ?? fallback;
 }
 
 function resolveCoinObjectSize(
