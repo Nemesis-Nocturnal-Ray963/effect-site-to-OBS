@@ -29,6 +29,13 @@ const patchSchema = z.object({
   isActive: z.boolean().optional()
 });
 
+const manualGiftSchema = z.object({
+  platformGiftId: z.string().max(200).optional(),
+  name: z.string().trim().min(1).max(200),
+  coinValue: z.number().int().nonnegative().nullable().optional(),
+  primaryImageUrl: z.string().trim().max(4000).nullable().optional()
+});
+
 export async function registerGiftRoutes(app: FastifyInstance, service: GiftCatalogService): Promise<void> {
   app.get("/api/v1/gifts", async (request, reply) => {
     const parsed = querySchema.safeParse(request.query ?? {});
@@ -40,6 +47,16 @@ export async function registerGiftRoutes(app: FastifyInstance, service: GiftCata
   });
 
   app.get("/api/v1/gifts/stats", async () => ({ stats: await service.stats() }));
+
+  app.post("/api/v1/gifts", async (request, reply) => {
+    const parsed = manualGiftSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "Invalid gift", issues: parsed.error.issues });
+    try {
+      return reply.code(201).send({ gift: await service.createManual(parsed.data) });
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
 
   app.get("/api/v1/gifts/:id", async (request, reply) => {
     const { id } = request.params as { id: string };

@@ -39,6 +39,18 @@ export const giftPileEffectDefinition: EffectDefinition = {
         min: 1,
         max: 2000,
         step: 1
+      },
+      {
+        key: "giftSizeOverridesJson",
+        label: "Gift-specific sizes",
+        type: "string",
+        defaultValue: "[]"
+      },
+      {
+        key: "coinImageRulesJson",
+        label: "Coin-specific gift images",
+        type: "string",
+        defaultValue: "[]"
       }
     ]
   }
@@ -64,16 +76,18 @@ export class GiftPileEffectService {
       ...(Array.isArray(event?.data.giftImageUrls) ? event.data.giftImageUrls : []),
       event?.data.imageUrl
     ];
-    const imageUrl = urls.find(
+    const eventImageUrl = urls.find(
       (url): url is string => typeof url === "string" && /^(https?:\/\/|\/(?!\/))/u.test(url)
     );
+    const imageUrl = resolveCoinImageUrl(configuration.visual.parameters, event) ?? eventImageUrl;
+    const objectSizePx = resolveGiftObjectSize(configuration.visual.parameters, event);
     this.broadcast(configuration.targetOverlayId, {
       type: "effect:play",
       effectId: "gift-pile",
       instanceId: randomUUID(),
       targetOverlayId: configuration.targetOverlayId,
       createdAt: new Date().toISOString(),
-      parameters: { ...configuration.visual.parameters, action: "add", quantity },
+      parameters: { ...configuration.visual.parameters, action: "add", quantity, objectSizePx },
       media: { imageUrl },
       visual: configuration.visual
     });
@@ -129,4 +143,90 @@ export class GiftPileEffectService {
     if (this.counts.size > 10000) this.counts.delete(this.counts.keys().next().value!);
     return delta;
   }
+}
+
+export function resolveCoinImageUrl(parameters: Record<string, unknown>, event?: NormalizedEvent): string | undefined {
+  if (!event || typeof parameters.coinImageRulesJson !== "string") return undefined;
+  const coinValue = giftCoinValue(event);
+  try {
+    const parsed = JSON.parse(parameters.coinImageRulesJson) as unknown;
+    if (!Array.isArray(parsed)) return undefined;
+    const match = parsed.find(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        (item as Record<string, unknown>).useCustomImage !== false &&
+        numeric((item as Record<string, unknown>).coinValue) === coinValue
+    ) as Record<string, unknown> | undefined;
+    const imageUrl = match?.imageUrl;
+    return typeof imageUrl === "string" && /^(https?:\/\/|\/(?!\/))/u.test(imageUrl) ? imageUrl : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function numeric(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : -1;
+}
+
+function giftCoinValue(event: NormalizedEvent): number {
+  const perGift = Math.max(numeric(event.data.coinValue), numeric(event.data.diamondValue));
+  if (perGift >= 0) return perGift;
+  const total = Math.max(numeric(event.data.coinValueTotal), numeric(event.data.diamondValueTotal));
+  const count = Math.max(1, numeric(event.data.repeatCount), numeric(event.data.normalizedGiftQuantity));
+  return total >= 0 ? total / count : -1;
+}
+
+export function resolveGiftObjectSize(
+  parameters: Record<string, unknown>,
+  event?: NormalizedEvent
+): number {
+  const fallback = clampSize(parameters.objectSizePx, 44);
+  if (!event) return fallback;
+  const coinSize = resolveCoinObjectSize(parameters, event);
+  if (coinSize !== undefined) return coinSize;
+  const giftId = String(event.data.giftId ?? event.data.platformGiftId ?? "").trim();
+  if (!giftId || typeof parameters.giftSizeOverridesJson !== "string") return fallback;
+  try {
+    const parsed = JSON.parse(parameters.giftSizeOverridesJson) as unknown;
+    if (!Array.isArray(parsed)) return fallback;
+    const match = parsed.find(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        String((item as Record<string, unknown>).giftId ?? "").trim() === giftId
+    ) as Record<string, unknown> | undefined;
+    return match ? clampSize(match.sizePx, fallback) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function resolveCoinObjectSize(
+  parameters: Record<string, unknown>,
+  event: NormalizedEvent
+): number | undefined {
+  if (typeof parameters.coinImageRulesJson !== "string") return undefined;
+  const coinValue = giftCoinValue(event);
+  try {
+    const parsed = JSON.parse(parameters.coinImageRulesJson) as unknown;
+    if (!Array.isArray(parsed)) return undefined;
+    const match = parsed.find(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        numeric((item as Record<string, unknown>).coinValue) === coinValue
+    ) as Record<string, unknown> | undefined;
+    return typeof match?.sizePx === "number" && Number.isFinite(match.sizePx)
+      ? clampSize(match.sizePx, 44)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function clampSize(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.round(Math.max(16, Math.min(500, value)))
+    : fallback;
 }

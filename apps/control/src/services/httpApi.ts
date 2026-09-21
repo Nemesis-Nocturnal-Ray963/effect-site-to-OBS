@@ -258,6 +258,21 @@ export async function updateGift(
   return data.gift;
 }
 
+export async function createGift(input: {
+  platformGiftId?: string;
+  name: string;
+  coinValue?: number | null;
+  primaryImageUrl?: string | null;
+}): Promise<GiftCatalogRecord> {
+  const response = await fetch("/api/v1/gifts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error("Failed to create gift");
+  return ((await response.json()) as { gift: GiftCatalogRecord }).gift;
+}
+
 export async function clearEventHistory(): Promise<void> {
   const response = await fetch("/api/v1/events/history", { method: "DELETE" });
   if (!response.ok) {
@@ -817,7 +832,17 @@ export async function deletePresetSlot(presetId: string, slotId: string): Promis
   if (!response.ok) throw new Error("Failed to delete preset slot");
 }
 
-export async function testEffectConfiguration(id: string, options?: { pitchingScenario?: "manual" | "same-listener-gifts" | "multiple-listener-gifts" | "new-listener-gift" }): Promise<void> {
+export interface EffectTestOptions {
+  pitchingScenario?: "manual" | "same-listener-gifts" | "multiple-listener-gifts" | "new-listener-gift";
+  gift?: {
+    platformGiftId?: string;
+    name?: string;
+    coinValue: number;
+    imageUrl?: string;
+  };
+}
+
+export async function testEffectConfiguration(id: string, options?: EffectTestOptions): Promise<void> {
   const response = await fetch(`/api/v1/effect-configurations/${encodeURIComponent(id)}/test`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

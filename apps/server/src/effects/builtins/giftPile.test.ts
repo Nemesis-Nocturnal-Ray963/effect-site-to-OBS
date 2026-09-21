@@ -4,7 +4,7 @@ import type {
   EffectPlayMessage,
   NormalizedEvent
 } from "@obs-effect/shared-types";
-import { GiftPileEffectService } from "./giftPile.js";
+import { GiftPileEffectService, resolveCoinImageUrl, resolveGiftObjectSize } from "./giftPile.js";
 
 const configuration = {
   id: "pile",
@@ -26,6 +26,91 @@ function gift(type: NormalizedEvent["type"], count: number, id: string): Normali
 }
 
 describe("gift pile delivery", () => {
+  it("uses a configured image for the gift's per-item coin value", () => {
+    const event = gift("gift-streak-end", 10, "coin-image");
+    event.data.diamondValue = 2;
+    event.data.diamondValueTotal = 20;
+    expect(
+      resolveCoinImageUrl(
+        {
+          coinImageRulesJson: '[{"coinValue":2,"imageUrl":"/asset-files/two-coin.png"}]'
+        },
+        event
+      )
+    ).toBe("/asset-files/two-coin.png");
+    expect(
+      resolveCoinImageUrl(
+        {
+          coinImageRulesJson:
+            '[{"coinValue":2,"useCustomImage":false,"imageUrl":"/asset-files/two-coin.png"}]'
+        },
+        event
+      )
+    ).toBeUndefined();
+  });
+
+  it("uses a gift-specific size and safely falls back to the default size", () => {
+    const parameters = {
+      objectSizePx: 44,
+      giftSizeOverridesJson: JSON.stringify([
+        { giftId: "rose", sizePx: 120 },
+        { giftId: "heart", sizePx: 999 }
+      ])
+    };
+    expect(resolveGiftObjectSize(parameters, gift("gift", 1, "rose-event"))).toBe(120);
+    const heart = gift("gift", 1, "heart-event");
+    heart.data.giftId = "heart";
+    expect(resolveGiftObjectSize(parameters, heart)).toBe(500);
+    const unknown = gift("gift", 1, "unknown-event");
+    unknown.data.giftId = "unknown";
+    expect(resolveGiftObjectSize(parameters, unknown)).toBe(44);
+    expect(
+      resolveGiftObjectSize({ objectSizePx: 55, giftSizeOverridesJson: "invalid" }, unknown)
+    ).toBe(55);
+  });
+
+  it("uses a coin-specific size before a gift-specific or default size", () => {
+    const event = gift("gift", 1, "coin-size");
+    event.data.diamondValue = 25;
+    expect(
+      resolveGiftObjectSize(
+        {
+          objectSizePx: 44,
+          giftSizeOverridesJson: '[{"giftId":"rose","sizePx":90}]',
+          coinImageRulesJson: '[{"coinValue":25,"sizePx":140}]'
+        },
+        event
+      )
+    ).toBe(140);
+    expect(
+      resolveGiftObjectSize(
+        {
+          objectSizePx: 44,
+          giftSizeOverridesJson: '[{"giftId":"rose","sizePx":90}]',
+          coinImageRulesJson: '[{"coinValue":25,"sizePx":null}]'
+        },
+        event
+      )
+    ).toBe(90);
+  });
+
+  it("sends the resolved gift-specific size to the overlay", () => {
+    const sent: EffectPlayMessage[] = [];
+    const service = new GiftPileEffectService((_id, message) => sent.push(message));
+    const configured = {
+      ...configuration,
+      visual: {
+        ...configuration.visual,
+        parameters: {
+          objectSizePx: 44,
+          giftSizeOverridesJson: '[{"giftId":"rose","sizePx":132}]'
+        }
+      }
+    };
+    service.execute(configured, gift("gift", 1, "sized"));
+    expect(sent[0]?.parameters?.objectSizePx).toBe(132);
+  });
+
   it("counts a 1 → 2 → 10 → end combo exactly once, independently of coin value", () => {
     const sent: EffectPlayMessage[] = [];
     const service = new GiftPileEffectService((_id, message) => sent.push(message));

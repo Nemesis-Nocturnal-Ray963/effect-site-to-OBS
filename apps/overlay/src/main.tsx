@@ -20,6 +20,7 @@ import {
   type PuyoPair
 } from "./puyoEngine";
 import { GiftPileLayer, type GiftPileHandle } from "./GiftPileLayer";
+import defaultBallRevealUrl from "./assets/ball-reveal-default.png";
 import "./styles.css";
 
 const CURRENT_BUILD_VERSION = ((import.meta as ImportMeta & { env?: { VITE_BUILD_VERSION?: string } }).env?.VITE_BUILD_VERSION) ?? "dev";
@@ -36,6 +37,18 @@ interface SimpleMediaPlayback {
   id: string;
   message: EffectPlayMessage;
   durationMs: number;
+}
+
+interface BallRevealMedia {
+  id: string;
+  kind: "image" | "video";
+  url: string;
+  name: string;
+}
+
+interface BallRevealPlayback {
+  id: string;
+  message: EffectPlayMessage;
 }
 
 interface FallingImageBody {
@@ -788,11 +801,18 @@ function OverlayApp(): React.ReactElement {
   const giftPileRef = React.useRef<GiftPileHandle>(null);
   const [flashes, setFlashes] = React.useState<Flash[]>([]);
   const [simpleMedia, setSimpleMedia] = React.useState<SimpleMediaPlayback[]>([]);
+  const [ballRevealQueue, setBallRevealQueue] = React.useState<BallRevealPlayback[]>([]);
+  const shuffleDecksRef = React.useRef(new Map<string, { signature: string; deck: string[]; lastId?: string }>());
   const [snapshot, setSnapshot] = React.useState<RuntimeOverlaySnapshot | null>(null);
   const [connected, setConnected] = React.useState(false);
   const overlayId = React.useMemo(() => getOverlayId(), []);
   const debug = new URLSearchParams(window.location.search).get("debug") === "1";
   useUploadedFonts();
+  const chooseQueuedBallRevealMedia = React.useCallback(
+    (message: EffectPlayMessage, excludedIds: Set<string>) => chooseBallRevealMedia(message, excludedIds, shuffleDecksRef.current),
+    []
+  );
+  const completeBallReveal = React.useCallback(() => setBallRevealQueue((current) => current.slice(1)), []);
 
   React.useEffect(() => {
     let ws: WebSocket | null = null;
@@ -837,6 +857,11 @@ function OverlayApp(): React.ReactElement {
         window.setTimeout(() => {
           setSimpleMedia((current) => current.filter((active) => active.id !== item.id));
         }, durationMs);
+      } else if (message.type === "effect:play" && message.effectId === "ball-reveal") {
+        const play = message as EffectPlayMessage;
+        const item: BallRevealPlayback = { id: play.instanceId, message: play };
+        const queueLimit = Math.max(1, Math.round(numberParam(play.parameters?.queueLimit, 20)));
+        setBallRevealQueue((current) => current.length >= queueLimit ? current : [...current, item]);
       } else if (message.type === "runtime:snapshot" && message.snapshot.overlayId === overlayId) {
         setSnapshot(message.snapshot);
       } else if (message.type === "runtime:object-created" && message.object.overlayId === overlayId) {
@@ -885,6 +910,15 @@ function OverlayApp(): React.ReactElement {
       {simpleMedia.map((item) => (
         <SimpleMediaView key={item.id} item={item} />
       ))}
+      {ballRevealQueue[0] ? (
+        <BallRevealView
+          key={ballRevealQueue[0].id}
+          item={ballRevealQueue[0]}
+          waitingCount={Math.max(0, ballRevealQueue.length - 1)}
+          chooseMedia={chooseQueuedBallRevealMedia}
+          onComplete={completeBallReveal}
+        />
+      ) : null}
       <GiftPileLayer ref={giftPileRef} />
       <FallingImagePhysicsLayer objects={(snapshot?.objects ?? []).filter(isRenderableFallingImage)} />
       <PitchingMachineLayer objects={(snapshot?.objects ?? []).filter(isRenderablePitchingObject)} />
@@ -2279,6 +2313,235 @@ function SimpleMediaView({ item }: { item: SimpleMediaPlayback }): React.ReactEl
       ) : null}
     </div>
   );
+}
+
+function BallRevealView(props: {
+  item: BallRevealPlayback;
+  waitingCount: number;
+  chooseMedia: (message: EffectPlayMessage, excludedIds: Set<string>) => BallRevealMedia | null;
+  onComplete: () => void;
+}): React.ReactElement {
+  const { item, waitingCount, chooseMedia, onComplete } = props;
+  const parameters = item.message.parameters ?? {};
+  const [failedIds, setFailedIds] = React.useState<Set<string>>(() => new Set());
+  const [media, setMedia] = React.useState<BallRevealMedia | null>(() => chooseMedia(item.message, new Set()));
+  const [phase, setPhase] = React.useState<"flight" | "reveal" | "fading">("flight");
+  const [attempt, setAttempt] = React.useState(0);
+  const [videoDurationMs, setVideoDurationMs] = React.useState(0);
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const revealStartedAtRef = React.useRef(0);
+  const travelDurationMs = numberParam(parameters.travelDurationMs, 900);
+  const revealDurationMs = numberParam(parameters.revealDurationMs, 520);
+  const imageDurationMs = Math.max(250, numberParam(parameters.imageDisplayDurationMs, 4000));
+  const imageFadeStartMs = Math.max(0, Math.min(imageDurationMs, numberParam(parameters.imageFadeStartMs, 3000)));
+  const videoFadeLeadMs = Math.max(0, numberParam(parameters.videoFadeLeadMs, 1000));
+  const videoVolume = Math.max(0, Math.min(1, numberParam(parameters.videoVolume, 1)));
+  const videoPlaybackRate = Math.max(0.25, Math.min(4, numberParam(parameters.videoPlaybackRate, 1)));
+
+  const retryWithAnotherMedia = React.useCallback(() => {
+    if (!media) {
+      onComplete();
+      return;
+    }
+    const nextFailed = new Set(failedIds);
+    nextFailed.add(media.id);
+    const next = chooseMedia(item.message, nextFailed);
+    if (!next) {
+      onComplete();
+      return;
+    }
+    setFailedIds(nextFailed);
+    setMedia(next);
+    setVideoDurationMs(0);
+    revealStartedAtRef.current = 0;
+    setPhase("flight");
+    setAttempt((value) => value + 1);
+  }, [chooseMedia, failedIds, item.message, media, onComplete]);
+
+  React.useEffect(() => {
+    if (!media) {
+      onComplete();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      revealStartedAtRef.current = performance.now();
+      setPhase("reveal");
+    }, Math.max(0, travelDurationMs));
+    return () => window.clearTimeout(timer);
+  }, [attempt, media, onComplete, travelDurationMs]);
+
+  React.useEffect(() => {
+    if (phase !== "reveal" || !media) return;
+    const fadeAt = media.kind === "image" ? imageFadeStartMs : Math.max(0, videoDurationMs - videoFadeLeadMs);
+    if (media.kind === "video" && videoDurationMs <= 0) return;
+    const elapsed = Math.max(0, performance.now() - revealStartedAtRef.current);
+    const fadeTimer = window.setTimeout(() => setPhase("fading"), Math.max(0, fadeAt - elapsed));
+    return () => window.clearTimeout(fadeTimer);
+  }, [imageFadeStartMs, media, phase, videoDurationMs, videoFadeLeadMs]);
+
+  React.useEffect(() => {
+    if (phase === "flight" || !media) return;
+    const totalDuration = media.kind === "image" ? imageDurationMs : videoDurationMs;
+    if (totalDuration <= 0) return;
+    const elapsed = Math.max(0, performance.now() - revealStartedAtRef.current);
+    const doneTimer = window.setTimeout(onComplete, Math.max(0, totalDuration - elapsed) + 100);
+    return () => window.clearTimeout(doneTimer);
+  }, [imageDurationMs, media, onComplete, phase, videoDurationMs]);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !media || media.kind !== "video") return;
+    video.playbackRate = videoPlaybackRate;
+    video.volume = videoVolume;
+    if (phase === "reveal" || phase === "fading") void video.play().catch(retryWithAnotherMedia);
+  }, [media, phase, retryWithAnotherMedia, videoPlaybackRate, videoVolume]);
+
+  React.useEffect(() => {
+    if (phase !== "fading" || !videoRef.current || !media || media.kind !== "video") return;
+    const video = videoRef.current;
+    const startedAt = performance.now();
+    const duration = Math.max(1, Math.min(videoFadeLeadMs, videoDurationMs));
+    const timer = window.setInterval(() => {
+      const progress = Math.min(1, (performance.now() - startedAt) / duration);
+      video.volume = videoVolume * (1 - progress);
+      if (progress >= 1) window.clearInterval(timer);
+    }, 30);
+    return () => window.clearInterval(timer);
+  }, [media, phase, videoDurationMs, videoFadeLeadMs, videoVolume]);
+
+  if (!media) return <></>;
+  const targetX = numberParam(parameters.targetXPercent, 50);
+  const targetY = numberParam(parameters.targetYPercent, 50);
+  const sparkleCount = Math.max(0, Math.min(80, Math.round(numberParam(parameters.sparkleCount, 18))));
+  const senderName = stringParam(item.message.runtimeData?.senderName, "Viewer");
+  const ballUrl = stringParam(item.message.runtimeData?.ballUrl, defaultBallRevealUrl);
+  const mediaFadeMs = media.kind === "image" ? Math.max(1, imageDurationMs - imageFadeStartMs) : Math.max(1, Math.min(videoFadeLeadMs, videoDurationMs || videoFadeLeadMs));
+
+  return (
+    <div
+      className={`ball-reveal-stage phase-${phase}`}
+      style={{
+        "--br-x": `${targetX}%`,
+        "--br-y": `${targetY}%`,
+        "--br-start-dy": `${numberParam(parameters.startYPercent, 72) - targetY}vh`,
+        "--br-arc": `${numberParam(parameters.arcHeightPercent, 38)}vh`,
+        "--br-travel-ms": `${travelDurationMs}ms`,
+        "--br-ball-size": `${numberParam(parameters.ballSizePx, 180)}px`,
+        "--br-rotation": `${numberParam(parameters.ballRotationDeg, 900)}deg`,
+        "--br-ball-fade-ms": `${numberParam(parameters.ballFadeDurationMs, 450)}ms`,
+        "--br-glow-color": stringParam(parameters.glowColor, "#fff7b0"),
+        "--br-glow-size": `${numberParam(parameters.glowSizePx, 360)}px`,
+        "--br-glow-ms": `${numberParam(parameters.glowDurationMs, 650)}ms`,
+        "--br-reveal-ms": `${revealDurationMs}ms`,
+        "--br-media-width": `${numberParam(parameters.mediaWidthPx, 760)}px`,
+        "--br-media-height": `${numberParam(parameters.mediaHeightPx, 760)}px`,
+        "--br-media-fade-ms": `${mediaFadeMs}ms`,
+        "--br-name-size": `${numberParam(parameters.senderNameFontSizePx, 42)}px`,
+        "--br-name-color": stringParam(parameters.senderNameColor, "#ffffff"),
+        zIndex: item.message.visual?.zIndex ?? 30
+      } as React.CSSProperties}
+    >
+      <img
+        key={`ball-${attempt}`}
+        className={`ball-reveal-ball ${phase !== "flight" ? "arrived" : ""}`}
+        src={ballUrl}
+        alt=""
+        onError={(event) => {
+          if (event.currentTarget.src !== new URL(defaultBallRevealUrl, window.location.href).href) event.currentTarget.src = defaultBallRevealUrl;
+        }}
+      />
+      {phase !== "flight" ? (
+        <div className="ball-reveal-burst" aria-hidden="true">
+          <span className="ball-reveal-glow" />
+          {Array.from({ length: sparkleCount }, (_, index) => (
+            <i
+              key={index}
+              style={{
+                "--spark-angle": `${(360 / Math.max(1, sparkleCount)) * index}deg`,
+                "--spark-distance": `${70 + (index % 5) * 24}px`,
+                "--spark-delay": `${(index % 4) * 22}ms`
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      ) : null}
+      <div className="ball-reveal-media-wrap">
+        {media.kind === "image" ? (
+          <img key={`${media.id}-${attempt}`} className="ball-reveal-media" src={media.url} alt="" onError={retryWithAnotherMedia} style={{ objectFit: fitParam(parameters.mediaFit) }} />
+        ) : (
+          <video
+            key={`${media.id}-${attempt}`}
+            ref={videoRef}
+            className="ball-reveal-media"
+            src={media.url}
+            playsInline
+            preload="auto"
+            onError={retryWithAnotherMedia}
+            onEnded={onComplete}
+            onLoadedMetadata={(event) => {
+              const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration * 1000 / videoPlaybackRate : 0;
+              setVideoDurationMs(duration);
+              event.currentTarget.volume = videoVolume;
+            }}
+            style={{ objectFit: fitParam(parameters.mediaFit) }}
+          />
+        )}
+      </div>
+      {booleanParam(parameters.senderNameEnabled, true) ? (
+        <div className="ball-reveal-sender">
+          <strong>{senderName}</strong>
+          {waitingCount > 0 ? <small>待機 {waitingCount}</small> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function chooseBallRevealMedia(
+  message: EffectPlayMessage,
+  excludedIds: Set<string>,
+  decks: Map<string, { signature: string; deck: string[]; lastId?: string }>
+): BallRevealMedia | null {
+  const pool = ballRevealMediaPool(message).filter((item) => !excludedIds.has(item.id));
+  if (pool.length === 0) return null;
+  const key = message.effectConfigId ?? "ball-reveal";
+  const signature = pool.map((item) => item.id).sort().join("|");
+  let state = decks.get(key);
+  if (!state || state.signature !== signature || state.deck.every((id) => !pool.some((item) => item.id === id))) {
+    const deck = shuffle(pool.map((item) => item.id));
+    if (deck.length > 1 && deck[0] === state?.lastId) [deck[0], deck[1]] = [deck[1]!, deck[0]!];
+    state = { signature, deck, lastId: state?.lastId };
+    decks.set(key, state);
+  }
+  while (state.deck.length > 0) {
+    const id = state.deck.shift()!;
+    const selected = pool.find((item) => item.id === id);
+    if (selected) {
+      state.lastId = id;
+      return selected;
+    }
+  }
+  decks.delete(key);
+  return chooseBallRevealMedia(message, excludedIds, decks);
+}
+
+function ballRevealMediaPool(message: EffectPlayMessage): BallRevealMedia[] {
+  const value = message.runtimeData?.mediaPool;
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is BallRevealMedia => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as Record<string, unknown>;
+    return typeof record.id === "string" && (record.kind === "image" || record.kind === "video") && typeof record.url === "string";
+  });
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex]!, next[index]!];
+  }
+  return next;
 }
 
 function GiftComboTextObject({ object }: { object: RuntimeEffectObject }): React.ReactElement {

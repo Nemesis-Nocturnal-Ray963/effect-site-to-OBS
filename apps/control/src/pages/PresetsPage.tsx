@@ -1,5 +1,7 @@
 ﻿import React from "react";
 import { GiftPileControls } from "../components/GiftPileControls";
+import { GiftPileOverridesEditor } from "../components/GiftPileOverridesEditor";
+import { GiftPileCoinRulesEditor } from "../components/GiftPileCoinRulesEditor";
 import type {
   AssetCatalogItem,
   EffectConfiguration,
@@ -32,6 +34,7 @@ import {
 } from "../services/httpApi";
 import { useI18n } from "../i18n/I18nProvider";
 import { CoordinatePicker } from "../components/CoordinatePicker";
+import { MediaAssetPoolEditor } from "../components/MediaAssetPoolEditor";
 
 const triggerOptions: Array<{ value: EffectTriggerCondition["type"]; label: string }> = [
   { value: "manual", label: "Manual" },
@@ -46,6 +49,7 @@ const triggerOptions: Array<{ value: EffectTriggerCondition["type"]; label: stri
 ];
 
 const pitchingCustomParameterKeys = new Set(["ballAssetId", "launchAudioAssetId", "impactAudioAssetId", "audioVolume", "targetXPercent", "targetYPercent"]);
+const ballRevealCustomParameterKeys = new Set(["ballAssetId", "mediaAssetIdsCsv", "targetXPercent", "targetYPercent"]);
 const giftComboSoundParameterKeys = new Set([
   "soundEnabled",
   "soundAssetId",
@@ -334,7 +338,9 @@ function SlotEditor(props: {
   const videoAssets = props.assets.filter((asset) => asset.kind === "video");
   const audioAssets = props.assets.filter((asset) => asset.kind === "audio");
   const isPitchingMachineBall = props.slot.effectDefinitionId === "pitching-machine-ball";
+  const isBallReveal = props.slot.effectDefinitionId === "ball-reveal";
   const isGiftComboText = props.slot.effectDefinitionId === "gift-combo-text";
+  const isGiftPile = props.slot.effectDefinitionId === "gift-pile";
   const selectedOverlay = props.overlays.find((overlay) => overlay.overlayId === props.slot.targetOverlayId);
   const [giftPickerOpen, setGiftPickerOpen] = React.useState(false);
   const [giftSearch, setGiftSearch] = React.useState("");
@@ -635,7 +641,31 @@ function SlotEditor(props: {
           <input type="checkbox" checked={props.slot.enabled} onChange={(event) => void props.onPatch({ enabled: event.target.checked })} />
           {t("Enabled")}
         </label>
-        {definition?.supportsImage ? (
+        {isBallReveal ? (
+          <>
+            <MediaAssetPoolEditor
+              assets={props.assets}
+              selectedIds={String(props.slot.visual.parameters.mediaAssetIdsCsv ?? "").split(",").map((item) => item.trim()).filter(Boolean)}
+              title={t("Random image / video list")}
+              onChange={(ids) => patchParameter("mediaAssetIdsCsv", ids.join(","))}
+            />
+            <label className="preset-asset-field">
+              {t("Ball asset")}
+              <select value={String(props.slot.visual.parameters.ballAssetId ?? "")} onChange={(event) => void patchParameter("ballAssetId", event.target.value)}>
+                <option value="">{t("Use bundled ball image")}</option>
+                {imageAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+              </select>
+            </label>
+            <CoordinatePicker
+              label={t("Reveal center")}
+              xPercent={numberParameter(props.slot.visual.parameters.targetXPercent, 50)}
+              yPercent={numberParameter(props.slot.visual.parameters.targetYPercent, 50)}
+              overlay={selectedOverlay}
+              onChange={(point) => props.onPatch({ visual: { parameters: { ...props.slot.visual.parameters, targetXPercent: point.xPercent, targetYPercent: point.yPercent } } })}
+            />
+          </>
+        ) : null}
+        {definition?.supportsImage && !isBallReveal ? (
           <label className="preset-asset-field">
             {isPitchingMachineBall ? t("Machine asset") : t("Image asset")}
             <select value={props.slot.media.imageAssetId ?? ""} onChange={(event) => void props.onPatch({ media: { ...props.slot.media, imageAssetId: event.target.value || undefined } })}>
@@ -648,7 +678,7 @@ function SlotEditor(props: {
             </select>
           </label>
         ) : null}
-        {definition?.supportsVideo ? (
+        {definition?.supportsVideo && !isBallReveal ? (
           <label className="preset-asset-field">
             {t("Video asset")}
             <select value={props.slot.media.videoAssetId ?? ""} onChange={(event) => void props.onPatch({ media: { ...props.slot.media, videoAssetId: event.target.value || undefined } })}>
@@ -784,10 +814,27 @@ function SlotEditor(props: {
       {definition ? (
         <section className="preset-parameters">
           <h3>{t("Effect parameters")}</h3>
+          {isGiftPile ? (
+            <>
+              <GiftPileOverridesEditor
+                gifts={props.gifts}
+                value={props.slot.visual.parameters.giftSizeOverridesJson}
+                onChange={(value) => patchParameter("giftSizeOverridesJson", value)}
+              />
+              <GiftPileCoinRulesEditor
+                assets={props.assets}
+                value={props.slot.visual.parameters.coinImageRulesJson}
+                onChange={(value) => patchParameter("coinImageRulesJson", value)}
+              />
+            </>
+          ) : null}
           <div className="form-grid">
             {definition.parameterSchema.fields
               .filter((field) => !isPitchingMachineBall || !pitchingCustomParameterKeys.has(field.key))
+              .filter((field) => !isBallReveal || !ballRevealCustomParameterKeys.has(field.key))
               .filter((field) => !isGiftComboText || !giftComboSoundParameterKeys.has(field.key))
+              .filter((field) => !isGiftPile || field.key !== "giftSizeOverridesJson")
+              .filter((field) => !isGiftPile || field.key !== "coinImageRulesJson")
               .map((field) => (
               <ParameterField
                 key={field.key}
@@ -1043,5 +1090,5 @@ function normalizePresetEffectTrigger(effectDefinitionId: string, trigger: Effec
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string | undefined): boolean {
-  return !!effectDefinitionId && ["flash", "simple-media", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
+  return !!effectDefinitionId && ["flash", "simple-media", "ball-reveal", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
 }

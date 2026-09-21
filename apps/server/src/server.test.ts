@@ -56,6 +56,36 @@ describe("server phase 1 contract", () => {
   });
 });
 
+describe("Ball Reveal effect", () => {
+  it("creates and test-plays a shuffled media configuration", async () => {
+    const temporaryRoot = await mkdtemp(path.join(tmpdir(), "obs-effect-ball-reveal-"));
+    const app = await createApp({ rootDir: temporaryRoot });
+    await app.ready();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/effect-configurations",
+        payload: {
+          name: "Ball Reveal Test",
+          effectDefinitionId: "ball-reveal",
+          visual: { parameters: { mediaAssetIdsCsv: "sample-test-card", queueLimit: 8 } }
+        }
+      });
+      expect(created.statusCode).toBe(201);
+      const tested = await app.inject({
+        method: "POST",
+        url: `/api/v1/effect-configurations/${created.json().configuration.id}/test`,
+        payload: {}
+      });
+      expect(tested.statusCode).toBe(200);
+      expect(tested.json()).toMatchObject({ accepted: true, triggeredEffects: ["ball-reveal"], mediaCount: 1 });
+    } finally {
+      await app.close();
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("DeduplicationStore", () => {
   it("marks the second event id as duplicate", () => {
     const store = new DeduplicationStore({ ttlMs: 600000, maxEntries: 10000 });
@@ -926,7 +956,7 @@ describe("Overlay routes", () => {
       });
       const overlays = await app.inject({ method: "GET", url: "/api/v1/overlays" });
 
-      expect(definitions.json().definitions.map((definition: { id: string }) => definition.id)).toEqual(["flash", "falling-image", "simple-media", "pitching-machine-ball", "puyo-game", "gift-combo-text", "gift-pile"]);
+      expect(definitions.json().definitions.map((definition: { id: string }) => definition.id)).toEqual(["flash", "falling-image", "simple-media", "ball-reveal", "pitching-machine-ball", "puyo-game", "gift-combo-text", "gift-pile"]);
       expect(created.statusCode).toBe(201);
       expect(created.json().configuration).toMatchObject({ name: "Comment Flash", targetOverlayId: 2, enabled: true });
       expect(disabled.json().configuration).toMatchObject({ enabled: false });

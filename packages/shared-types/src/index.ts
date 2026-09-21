@@ -12,6 +12,7 @@
   | "puyo-game"
   | "gift-pile"
   | "gift-combo-text"
+  | "ball-reveal"
   | "simple-media"
   | "media-composite";
 export type OverlayId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;

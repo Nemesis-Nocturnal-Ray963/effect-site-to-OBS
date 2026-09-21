@@ -2,6 +2,7 @@ import type { GiftCatalogRecord, GiftCatalogStats, NormalizedEvent } from "@obs-
 import type { GiftCatalogRepository } from "./GiftCatalogRepository.js";
 import { GiftExtractor } from "./GiftExtractor.js";
 import type { GiftCatalogPatch, GiftCatalogQuery } from "./giftTypes.js";
+import { randomUUID } from "node:crypto";
 
 interface GiftCatalogServiceOptions {
   repository: GiftCatalogRepository;
@@ -46,6 +47,31 @@ export class GiftCatalogService {
 
   get(id: string): Promise<GiftCatalogRecord | null> {
     return this.repository.getById(id);
+  }
+
+  async createManual(input: { platformGiftId?: string; name: string; coinValue?: number | null; primaryImageUrl?: string | null }): Promise<GiftCatalogRecord> {
+    const platformGiftId = input.platformGiftId?.trim() || `manual-${randomUUID()}`;
+    const existing = await this.repository.getByPlatformGiftId("tiktok", platformGiftId);
+    if (existing) throw new Error("Gift ID already exists");
+    const created = await this.repository.upsert({
+      platform: "tiktok",
+      platformGiftId,
+      name: input.name,
+      coinValue: input.coinValue,
+      diamondValue: input.coinValue,
+      primaryImageUrl: input.primaryImageUrl ?? undefined,
+      valueSource: "manual",
+      observedAt: new Date().toISOString(),
+      incrementSeenCount: false
+    });
+    const record = await this.repository.update(created.id, {
+      name: input.name,
+      coinValue: input.coinValue,
+      diamondValue: input.coinValue,
+      primaryImageUrl: input.primaryImageUrl
+    });
+    this.onCreated?.(record);
+    return record;
   }
 
   async update(id: string, patch: GiftCatalogPatch): Promise<GiftCatalogRecord> {

@@ -6,7 +6,13 @@ import type { OverlayConnectionManager } from "../../overlays/overlayConnectionM
 import type { EffectConfiguration, NormalizedEvent, ResolvedEffectMedia, RuntimeEffectObject } from "@obs-effect/shared-types";
 
 const effectTestSchema = z.object({
-  pitchingScenario: z.enum(["manual", "same-listener-gifts", "multiple-listener-gifts", "new-listener-gift"]).optional()
+  pitchingScenario: z.enum(["manual", "same-listener-gifts", "multiple-listener-gifts", "new-listener-gift"]).optional(),
+  gift: z.object({
+    platformGiftId: z.string().optional(),
+    name: z.string().optional(),
+    coinValue: z.number().nonnegative().max(1_000_000),
+    imageUrl: z.string().optional()
+  }).optional()
 });
 
 const configurationSchema = z.object({
@@ -80,11 +86,12 @@ export async function registerEffectRoutes(
   overlayManager: OverlayConnectionManager,
   now: () => string,
   options?: {
-    executeFallingImage?: (configuration: EffectConfiguration) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
+    executeFallingImage?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executePitchingMachineBall?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executeGiftComboText?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
-    executeGiftPile?: (configuration: EffectConfiguration) => { spawnedObjectCount: number; skipped: boolean };
+    executeGiftPile?: (configuration: EffectConfiguration, event?: NormalizedEvent) => { spawnedObjectCount: number; skipped: boolean };
     executePuyoGame?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
+    executeBallReveal?: (configuration: EffectConfiguration, event?: NormalizedEvent, triggerType?: string) => Promise<{ skipped: boolean; reason?: string; instanceId?: string; mediaCount?: number }>;
     resolveMedia?: (configuration: EffectConfiguration) => Promise<ResolvedEffectMedia>;
   }
 ): Promise<void> {
@@ -157,8 +164,9 @@ export async function registerEffectRoutes(
     if (!configuration) return reply.code(404).send({ accepted: false, error: "Effect configuration not found" });
     const parsedTest = effectTestSchema.safeParse(request.body ?? {});
     if (!parsedTest.success) return reply.code(400).send({ accepted: false, error: parsedTest.error.flatten() });
+    const giftTestEvent = parsedTest.data.gift ? createSelectedGiftTestEvent(parsedTest.data.gift) : undefined;
     if (configuration.effectDefinitionId === "falling-image" && options?.executeFallingImage) {
-      const result = await options.executeFallingImage(configuration);
+      const result = await options.executeFallingImage(configuration, giftTestEvent);
       if (result.skipped) {
         return reply.code(400).send({ accepted: false, error: result.reason ?? "Falling image effect could not be spawned" });
       }
@@ -170,7 +178,9 @@ export async function registerEffectRoutes(
       };
     }
     if (configuration.effectDefinitionId === "pitching-machine-ball" && options?.executePitchingMachineBall) {
-      const events = pitchingTestEvents(parsedTest.data.pitchingScenario ?? "manual");
+      const events = giftTestEvent
+        ? [giftTestEvent]
+        : pitchingTestEvents(parsedTest.data.pitchingScenario ?? "manual");
       const results = events.length > 0
         ? await Promise.all(events.map((event) => options.executePitchingMachineBall!(configuration, event)))
         : [await options.executePitchingMachineBall(configuration)];
@@ -189,7 +199,7 @@ export async function registerEffectRoutes(
       };
     }
     if (configuration.effectDefinitionId === "gift-combo-text" && options?.executeGiftComboText) {
-      const result = await options.executeGiftComboText(configuration, createComboGiftTestEvent());
+      const result = await options.executeGiftComboText(configuration, giftTestEvent ?? createComboGiftTestEvent());
       if (result.skipped) {
         return reply.code(400).send({ accepted: false, error: result.reason ?? "Gift combo effect could not be spawned" });
       }
@@ -201,11 +211,11 @@ export async function registerEffectRoutes(
       };
     }
     if (configuration.effectDefinitionId === "gift-pile" && options?.executeGiftPile) {
-      const result = options.executeGiftPile(configuration);
+      const result = options.executeGiftPile(configuration, giftTestEvent);
       return { accepted: !result.skipped, triggeredEffects: ["gift-pile"], targetOverlayId: configuration.targetOverlayId, spawnedObjectCount: result.spawnedObjectCount };
     }
     if (configuration.effectDefinitionId === "puyo-game" && options?.executePuyoGame) {
-      const result = await options.executePuyoGame(configuration);
+      const result = await options.executePuyoGame(configuration, giftTestEvent);
       if (result.skipped) {
         return reply.code(400).send({ accepted: false, error: result.reason ?? "Puyo game could not be spawned" });
       }
@@ -216,10 +226,23 @@ export async function registerEffectRoutes(
         spawnedObjectCount: result.spawnedObjects.length
       };
     }
+    if (configuration.effectDefinitionId === "ball-reveal" && options?.executeBallReveal) {
+      const result = await options.executeBallReveal(configuration, giftTestEvent ?? createBallRevealTestEvent(), "test");
+      if (result.skipped) return reply.code(400).send({ accepted: false, error: result.reason ?? "Ball reveal could not be played" });
+      return {
+        accepted: true,
+        triggeredEffects: ["ball-reveal"],
+        targetOverlayId: configuration.targetOverlayId,
+        instanceId: result.instanceId,
+        mediaCount: result.mediaCount
+      };
+    }
     const message = effectMessageFromConfiguration(configuration, {
       instanceId: `effect-config-test-${configuration.id}-${Date.now()}`,
       createdAt: now(),
-      media: options?.resolveMedia ? await options.resolveMedia(configuration) : undefined
+      media: options?.resolveMedia ? await options.resolveMedia(configuration) : undefined,
+      event: giftTestEvent,
+      triggerType: giftTestEvent ? "gift" : "manual"
     });
     overlayManager.broadcastToOverlay(configuration.targetOverlayId, message);
     return {
@@ -250,6 +273,48 @@ function createComboGiftTestEvent(): NormalizedEvent {
       diamondValue: 1,
       diamondValueTotal: 10
     }
+  };
+}
+
+export function createSelectedGiftTestEvent(gift: { platformGiftId?: string; name?: string; coinValue: number; imageUrl?: string }): NormalizedEvent {
+  const timestamp = new Date().toISOString();
+  const giftId = gift.platformGiftId?.trim() || `coin-${gift.coinValue}`;
+  return {
+    schemaVersion: "1.0",
+    eventId: `selected-gift-test-${Date.now()}`,
+    source: "test",
+    platform: "tiktok",
+    type: "gift",
+    timestamp,
+    receivedAt: timestamp,
+    user: { id: "selected-gift-test-user", displayName: "Gift Tester" },
+    data: {
+      giftId,
+      platformGiftId: giftId,
+      giftName: gift.name?.trim() || `${gift.coinValue} Coin Gift`,
+      repeatCount: 1,
+      normalizedGiftQuantity: 1,
+      coinValue: gift.coinValue,
+      coinValueTotal: gift.coinValue,
+      diamondValue: gift.coinValue,
+      diamondValueTotal: gift.coinValue,
+      giftImageUrls: gift.imageUrl ? [gift.imageUrl] : undefined
+    }
+  };
+}
+
+function createBallRevealTestEvent(): NormalizedEvent {
+  const timestamp = new Date().toISOString();
+  return {
+    schemaVersion: "1.0",
+    eventId: `ball-reveal-test-${Date.now()}`,
+    source: "test",
+    platform: "tiktok",
+    type: "gift",
+    timestamp,
+    receivedAt: timestamp,
+    user: { id: "ball-reveal-test-user", uniqueId: "ball-reveal-test", displayName: "Test Viewer" },
+    data: { giftId: "ball-reveal-test-gift", giftName: "Test Gift", repeatCount: 1 }
   };
 }
 

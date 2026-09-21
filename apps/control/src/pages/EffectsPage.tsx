@@ -1,5 +1,8 @@
 ﻿import React from "react";
 import { GiftPileControls } from "../components/GiftPileControls";
+import { GiftPileOverridesEditor } from "../components/GiftPileOverridesEditor";
+import { EffectGiftTestControls } from "../components/EffectGiftTestControls";
+import { GiftPileCoinRulesEditor } from "../components/GiftPileCoinRulesEditor";
 import type { AssetCatalogItem, EffectConfiguration, EffectDefinition, EffectTriggerCondition, GiftCatalogRecord, OverlayId, OverlayStatus } from "@obs-effect/shared-types";
 import {
   createEffectConfiguration,
@@ -20,6 +23,7 @@ import {
 import { useI18n } from "../i18n/I18nProvider";
 import { useConnectionStore } from "../stores/connectionStore";
 import { CoordinatePicker } from "../components/CoordinatePicker";
+import { MediaAssetPoolEditor } from "../components/MediaAssetPoolEditor";
 
 const triggerOptions: Array<{ value: EffectTriggerCondition["type"]; label: string }> = [
   { value: "manual", label: "Manual only" },
@@ -48,7 +52,7 @@ function newCondition(type: EffectTriggerCondition["type"]): EffectTriggerCondit
 
 function defaultTikTokTrigger(effectDefinitionId: string): EffectConfiguration["trigger"] | undefined {
   if (["gift-combo-text", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
-  if (["flash", "simple-media", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
+  if (["flash", "simple-media", "ball-reveal", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
   return undefined;
 }
 
@@ -115,6 +119,9 @@ export function EffectsPage(): React.ReactElement {
     if (effectDefinitionId === "gift-combo-text" && audioAsset?.id) {
       parameters.soundAssetId = audioAsset.id;
     }
+    if (effectDefinitionId === "ball-reveal" && imageAsset?.id) {
+      parameters.mediaAssetIdsCsv = imageAsset.id;
+    }
     const configuration = await createEffectConfiguration({
       name: name?.trim() || `${definition?.name ?? "Effect"} Configuration`,
       effectDefinitionId,
@@ -157,8 +164,8 @@ export function EffectsPage(): React.ReactElement {
     setMessage(t("Deleted"));
   }
 
-  async function runTest(configuration: EffectConfiguration): Promise<void> {
-    await testEffectConfiguration(configuration.id);
+  async function runTest(configuration: EffectConfiguration, options?: import("../services/httpApi").EffectTestOptions): Promise<void> {
+    await testEffectConfiguration(configuration.id, options);
     setMessage(`Test sent to Overlay ${configuration.targetOverlayId}`);
   }
 
@@ -226,6 +233,13 @@ export function EffectsPage(): React.ReactElement {
               </div>
               {definition.id === "gift-pile" ? <GiftPileControls overlayId={configuration?.targetOverlayId ?? 1} /> : null}
               <span className={`overlay-status ${configuration?.enabled ? "active" : ""}`}>{configuration ? (configuration.enabled ? t("enabled") : t("disabled")) : t("not set")}</span>
+              <EffectGiftTestControls
+                gifts={gifts}
+                onTest={async (options) => {
+                  const target = await ensureConfiguration(definition.id);
+                  await runTest(target, options);
+                }}
+              />
               <div className="effect-config-actions">
                 <button
                   type="button"
@@ -274,8 +288,8 @@ export function EffectsPage(): React.ReactElement {
             const updated = await setEffectConfigurationEnabled(selected.id, !selected.enabled);
             setConfigurations((items) => items.map((item) => (item.id === updated.id ? updated : item)));
           }}
-          onTest={async (pitchingScenario) => {
-            await testEffectConfiguration(selected.id, pitchingScenario ? { pitchingScenario } : undefined);
+          onTest={async (pitchingScenario, options) => {
+            await testEffectConfiguration(selected.id, options ?? (pitchingScenario ? { pitchingScenario } : undefined));
             setMessage(`Test sent to Overlay ${selected.targetOverlayId}`);
           }}
         />
@@ -296,7 +310,7 @@ interface EffectDrawerProps {
   onDelete: () => Promise<void>;
   onDuplicate: () => Promise<void>;
   onToggle: () => Promise<void>;
-  onTest: (pitchingScenario?: PitchingTestScenario) => Promise<void>;
+  onTest: (pitchingScenario?: PitchingTestScenario, options?: import("../services/httpApi").EffectTestOptions) => Promise<void>;
 }
 
 function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
@@ -309,6 +323,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
   const videoAssets = props.assets.filter((asset) => asset.kind === "video");
   const isFallingImage = configuration.effectDefinitionId === "falling-image";
   const isSimpleMedia = configuration.effectDefinitionId === "simple-media";
+  const isBallReveal = configuration.effectDefinitionId === "ball-reveal";
   const isPitchingMachineBall = configuration.effectDefinitionId === "pitching-machine-ball";
   const isGiftComboText = configuration.effectDefinitionId === "gift-combo-text";
   const isGiftPile = configuration.effectDefinitionId === "gift-pile";
@@ -346,6 +361,10 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
 
   function patchGiftIds(ids: string[]): Promise<void> {
     return patchParameter("giftIdsCsv", ids.join(","));
+  }
+
+  function selectedMediaIds(): string[] {
+    return parameterString("mediaAssetIdsCsv", "").split(",").map((item) => item.trim()).filter(Boolean);
   }
 
   return (
@@ -585,6 +604,53 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             </label>
           </>
         ) : null}
+        {isBallReveal ? (
+          <>
+            <MediaAssetPoolEditor
+              assets={props.assets}
+              selectedIds={selectedMediaIds()}
+              title={t("Random image / video list")}
+              onChange={(ids) => patchParameter("mediaAssetIdsCsv", ids.join(","))}
+            />
+            <label>
+              {t("Ball asset")}
+              <select value={parameterString("ballAssetId", "")} onChange={(event) => void patchParameter("ballAssetId", event.target.value)}>
+                <option value="">{t("Use bundled ball image")}</option>
+                {imageAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+              </select>
+            </label>
+            <CoordinatePicker
+              label={t("Reveal center")}
+              xPercent={parameterNumber("targetXPercent", 50)}
+              yPercent={parameterNumber("targetYPercent", 50)}
+              overlay={selectedOverlay}
+              onChange={(point) => props.onPatch({ visual: { parameters: { ...configuration.visual.parameters, targetXPercent: point.xPercent, targetYPercent: point.yPercent } } })}
+            />
+            <NumberField label={t("Start Y %")} value={parameterNumber("startYPercent", 72)} min={-50} max={150} onChange={(value) => patchParameter("startYPercent", value)} />
+            <NumberField label={t("Travel duration ms")} value={parameterNumber("travelDurationMs", 900)} min={100} max={10000} step={50} onChange={(value) => patchParameter("travelDurationMs", value)} />
+            <NumberField label={t("Arc height %")} value={parameterNumber("arcHeightPercent", 38)} min={0} max={150} onChange={(value) => patchParameter("arcHeightPercent", value)} />
+            <NumberField label={t("Ball size px")} value={parameterNumber("ballSizePx", 180)} min={16} max={1000} onChange={(value) => patchParameter("ballSizePx", value)} />
+            <NumberField label={t("Ball rotation deg")} value={parameterNumber("ballRotationDeg", 900)} min={-3600} max={3600} step={15} onChange={(value) => patchParameter("ballRotationDeg", value)} />
+            <NumberField label={t("Ball fade ms")} value={parameterNumber("ballFadeDurationMs", 450)} min={0} max={5000} step={50} onChange={(value) => patchParameter("ballFadeDurationMs", value)} />
+            <label>{t("Glow color")}<input type="color" value={parameterString("glowColor", "#fff7b0")} onChange={(event) => void patchParameter("glowColor", event.target.value)} /></label>
+            <NumberField label={t("Glow duration ms")} value={parameterNumber("glowDurationMs", 650)} min={50} max={5000} step={50} onChange={(value) => patchParameter("glowDurationMs", value)} />
+            <NumberField label={t("Glow size px")} value={parameterNumber("glowSizePx", 360)} min={20} max={1600} step={10} onChange={(value) => patchParameter("glowSizePx", value)} />
+            <NumberField label={t("Sparkle count")} value={parameterNumber("sparkleCount", 18)} min={0} max={80} onChange={(value) => patchParameter("sparkleCount", value)} />
+            <NumberField label={t("Reveal scale duration ms")} value={parameterNumber("revealDurationMs", 520)} min={50} max={5000} step={50} onChange={(value) => patchParameter("revealDurationMs", value)} />
+            <NumberField label={t("Media width px")} value={parameterNumber("mediaWidthPx", 760)} min={32} max={3840} step={10} onChange={(value) => patchParameter("mediaWidthPx", value)} />
+            <NumberField label={t("Media height px")} value={parameterNumber("mediaHeightPx", 760)} min={32} max={3840} step={10} onChange={(value) => patchParameter("mediaHeightPx", value)} />
+            <label>{t("Media fit")}<select value={parameterString("mediaFit", "contain")} onChange={(event) => void patchParameter("mediaFit", event.target.value)}><option value="contain">contain</option><option value="cover">cover</option><option value="fill">fill</option></select></label>
+            <NumberField label={t("Image display ms")} value={parameterNumber("imageDisplayDurationMs", 4000)} min={250} max={600000} step={100} onChange={(value) => patchParameter("imageDisplayDurationMs", value)} />
+            <NumberField label={t("Image fade start ms")} value={parameterNumber("imageFadeStartMs", 3000)} min={0} max={600000} step={100} onChange={(value) => patchParameter("imageFadeStartMs", value)} />
+            <NumberField label={t("Video fade lead ms")} value={parameterNumber("videoFadeLeadMs", 1000)} min={0} max={30000} step={100} onChange={(value) => patchParameter("videoFadeLeadMs", value)} />
+            <NumberField label={t("Video volume")} value={parameterNumber("videoVolume", 1)} min={0} max={1} step={0.05} onChange={(value) => patchParameter("videoVolume", value)} />
+            <NumberField label={t("Video playback rate")} value={parameterNumber("videoPlaybackRate", 1)} min={0.25} max={4} step={0.05} onChange={(value) => patchParameter("videoPlaybackRate", value)} />
+            <label className="checkbox-row"><input type="checkbox" checked={parameterBoolean("senderNameEnabled", true)} onChange={(event) => void patchParameter("senderNameEnabled", event.target.checked)} />{t("Show sender name")}</label>
+            <NumberField label={t("Sender name size px")} value={parameterNumber("senderNameFontSizePx", 42)} min={10} max={160} onChange={(value) => patchParameter("senderNameFontSizePx", value)} />
+            <label>{t("Sender name color")}<input type="color" value={parameterString("senderNameColor", "#ffffff")} onChange={(event) => void patchParameter("senderNameColor", event.target.value)} /></label>
+            <NumberField label={t("Queue limit")} value={parameterNumber("queueLimit", 20)} min={1} max={200} onChange={(value) => patchParameter("queueLimit", value)} />
+          </>
+        ) : null}
         {isPitchingMachineBall ? (
           <>
             <label>
@@ -714,6 +780,16 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
           <>
             <NumberField label={t("Gift object size (px)")} value={parameterNumber("objectSizePx", 44)} min={16} max={160} onChange={(value) => patchParameter("objectSizePx", value)} />
             <NumberField label={t("Maximum accumulated gifts")} value={parameterNumber("maxObjects", 1000)} min={1} max={2000} onChange={(value) => patchParameter("maxObjects", value)} />
+            <GiftPileOverridesEditor
+              gifts={props.gifts}
+              value={configuration.visual.parameters.giftSizeOverridesJson}
+              onChange={(value) => patchParameter("giftSizeOverridesJson", value)}
+            />
+            <GiftPileCoinRulesEditor
+              assets={props.assets}
+              value={configuration.visual.parameters.coinImageRulesJson}
+              onChange={(value) => patchParameter("coinImageRulesJson", value)}
+            />
             <GiftPileControls overlayId={configuration.targetOverlayId} />
           </>
         ) : null}
@@ -940,6 +1016,10 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
       </div>
 
       <div className="drawer-actions">
+        <EffectGiftTestControls
+          gifts={props.gifts}
+          onTest={(options) => props.onTest(undefined, options)}
+        />
         <div className="button-row">
           <button type="button" onClick={() => void props.onTest()}>
             {t("Test")}

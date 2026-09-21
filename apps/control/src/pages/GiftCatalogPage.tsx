@@ -1,7 +1,7 @@
 import React from "react";
 import type { GiftCatalogRecord, GiftCatalogStats, GiftImageCacheStatus } from "@obs-effect/shared-types";
 import { useI18n } from "../i18n/I18nProvider";
-import { fetchGiftStats, fetchGifts, updateGift } from "../services/httpApi";
+import { createGift, fetchGiftStats, fetchGifts, updateGift } from "../services/httpApi";
 
 const columns = ["Image", "Name", "Gift ID", "Coin", "First Seen", "Last Seen", "Seen", "Image Status"];
 
@@ -28,6 +28,7 @@ export function GiftCatalogPage(): React.ReactElement {
   const [viewMode, setViewMode] = React.useState<"tile" | "table">("tile");
   const [status, setStatus] = React.useState("");
   const [form, setForm] = React.useState({ name: "", coinValue: "", primaryImageUrl: "", isActive: true });
+  const [manualForm, setManualForm] = React.useState({ platformGiftId: "", name: "", coinValue: "", primaryImageUrl: "" });
 
   const load = React.useCallback(async (): Promise<void> => {
     const [nextGifts, nextStats] = await Promise.all([
@@ -88,6 +89,25 @@ export function GiftCatalogPage(): React.ReactElement {
     }
   }
 
+  async function handleManualCreate(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    setStatus(t("Saving..."));
+    try {
+      const created = await createGift({
+        platformGiftId: manualForm.platformGiftId.trim() || undefined,
+        name: manualForm.name.trim(),
+        coinValue: manualForm.coinValue === "" ? null : Number(manualForm.coinValue),
+        primaryImageUrl: manualForm.primaryImageUrl.trim() || null
+      });
+      setManualForm({ platformGiftId: "", name: "", coinValue: "", primaryImageUrl: "" });
+      await load();
+      setSelected(created);
+      setStatus(t("Saved"));
+    } catch {
+      setStatus(t("Save failed"));
+    }
+  }
+
   return (
     <section className="page-stack">
       <div className="page-heading">
@@ -113,6 +133,18 @@ export function GiftCatalogPage(): React.ReactElement {
           <strong>{stats?.missingValue ?? "-"}</strong>
         </div>
       </div>
+
+      <form className="panel form-grid" onSubmit={(event) => void handleManualCreate(event)}>
+        <div>
+          <h3>{t("Add gift manually")}</h3>
+          <p className="empty-text">{t("Gift ID is optional. The app creates an internal ID when it is unknown.")}</p>
+        </div>
+        <label>{t("Name")}<input required value={manualForm.name} onChange={(event) => setManualForm({ ...manualForm, name: event.target.value })} /></label>
+        <label>{t("Gift ID")}<input value={manualForm.platformGiftId} onChange={(event) => setManualForm({ ...manualForm, platformGiftId: event.target.value })} /></label>
+        <label>{t("Coin")}<input type="number" min="0" value={manualForm.coinValue} onChange={(event) => setManualForm({ ...manualForm, coinValue: event.target.value })} /></label>
+        <label>{t("Primary Image URL")}<input value={manualForm.primaryImageUrl} onChange={(event) => setManualForm({ ...manualForm, primaryImageUrl: event.target.value })} /></label>
+        <button type="submit">{t("Add gift")}</button>
+      </form>
 
       <form className="panel monitor-toolbar" onSubmit={(event) => void handleSearch(event)}>
         <label>

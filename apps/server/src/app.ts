@@ -96,6 +96,12 @@ function parseInteractionMessage(payload: unknown): ClientInteractionMessage | n
   return null;
 }
 
+function stringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  if (typeof value !== "string") return [];
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
 export async function createApp(options: CreateAppOptions) {
   const rootDir = options.rootDir;
   const bindAddress = options.bindAddress ?? "127.0.0.1";
@@ -212,6 +218,42 @@ export async function createApp(options: CreateAppOptions) {
     };
   }
 
+  async function executeBallReveal(
+    configuration: Awaited<ReturnType<EffectConfigurationService["list"]>>[number],
+    event?: NormalizedEvent,
+    triggerType = "manual"
+  ): Promise<{ skipped: boolean; reason?: string; instanceId?: string; mediaCount?: number }> {
+    const assets = await loadCatalog(rootDir);
+    const byId = new Map(assets.map((asset) => [asset.id, asset]));
+    const configuredIds = stringList(configuration.visual.parameters.mediaAssetIdsCsv);
+    if (configuredIds.length === 0) {
+      if (configuration.media.imageAssetId) configuredIds.push(configuration.media.imageAssetId);
+      if (configuration.media.videoAssetId) configuredIds.push(configuration.media.videoAssetId);
+    }
+    const mediaPool = [...new Set(configuredIds)]
+      .map((id) => byId.get(id))
+      .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset && (asset.kind === "image" || asset.kind === "video")))
+      .map((asset) => ({ id: asset.id, kind: asset.kind as "image" | "video", url: asset.contentUrl, name: asset.name }));
+    if (mediaPool.length === 0) return { skipped: true, reason: "At least one valid image or video is required" };
+
+    const ballAssetId = typeof configuration.visual.parameters.ballAssetId === "string" ? configuration.visual.parameters.ballAssetId : "";
+    const ballAsset = ballAssetId ? byId.get(ballAssetId) : undefined;
+    const message = effectMessageFromConfiguration(configuration, {
+      instanceId: `ball-reveal-${configuration.id}-${Date.now()}`,
+      createdAt: now(),
+      event,
+      triggerType
+    });
+    (message as EffectPlayMessage).runtimeData = {
+      ...message.runtimeData,
+      senderName: event?.user?.displayName ?? event?.user?.uniqueId ?? "Test Viewer",
+      ballUrl: ballAsset?.kind === "image" ? ballAsset.contentUrl : undefined,
+      mediaPool
+    };
+    overlayConnectionManager.broadcastToOverlay(configuration.targetOverlayId, message);
+    return { skipped: false, instanceId: message.instanceId, mediaCount: mediaPool.length };
+  }
+
   async function matchedActionsFor(event: NormalizedEvent): Promise<string[]> {
     const configurations = await effectConfigurationService.match(event);
     return configurations.map((configuration) => configuration.effectDefinitionId);
@@ -284,6 +326,10 @@ export async function createApp(options: CreateAppOptions) {
     event: NormalizedEvent,
     triggerType?: string
   ): Promise<void> {
+    if (configuration.effectDefinitionId === "ball-reveal") {
+      await executeBallReveal(configuration, event, triggerType);
+      return;
+    }
     if (configuration.effectDefinitionId === "gift-pile" && giftPileEffectService) {
       giftPileEffectService.execute(configuration, event);
       return;
@@ -787,11 +833,12 @@ export async function createApp(options: CreateAppOptions) {
   await registerGameIntegrationRoutes(app, { rootDir, now });
   await registerPresetRoutes(app, presetService, effectConfigurationService);
   await registerEffectRoutes(app, effectConfigurationService, overlayConnectionManager, now, {
-    executeFallingImage: (configuration) => fallingImageEffectService!.execute(configuration),
+    executeFallingImage: (configuration, event) => fallingImageEffectService!.execute(configuration, event),
     executePitchingMachineBall: (configuration, event) => pitchingMachineBallEffectService!.execute(configuration, event),
     executeGiftComboText: (configuration, event) => giftComboTextEffectService!.execute(configuration, event),
-    executeGiftPile: (configuration) => giftPileEffectService!.execute(configuration),
+    executeGiftPile: (configuration, event) => giftPileEffectService!.execute(configuration, event),
     executePuyoGame: (configuration, event) => puyoGameEffectService!.execute(configuration, event),
+    executeBallReveal,
     resolveMedia: resolveEffectMedia
   });
   await registerRuntimeRoutes(app, runtimeInteractionService);

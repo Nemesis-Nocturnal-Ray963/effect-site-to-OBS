@@ -530,3 +530,19 @@ Control 全体の `tsc --noEmit` は、既存の別ページ由来の TypeScript
 ## 22. 次に開発する時の短い引き継ぎ
 
 このアプリは pnpm workspace 構成で、`apps/server` が Fastify、`apps/control` が React/Vite、`apps/overlay` が React/Vite、`packages/shared-types` が共有型です。現在はアセット管理、プリセット、複数 Overlay、TikTok 周辺、Gift Catalog、Pitching Machine Ball Effect、Gift Combo Text Effect がかなり進んでいます。Pitching Machine Ball は左/右ランダム発射、左右端補正、照準角度、反動、退場演出まで実装済みです。Gift Combo Text はギフト数をコンボ数として加算し、受付猶予、表示言語、フォント、縁取り、CMY rainbow、音声とピッチ変化に対応済みです。アセット画面は複数アップロード、検索、フィルター、拡張子詳細フィルター、並び替え、タイル/リスト表示、音声プレビューに対応済みです。
+
+## 23. Ball Reveal Effect
+
+Effect definition ID は `ball-reveal` です。
+
+- 左画面外から指定中心座標へ、ボールが放物線を描いて飛来
+- 到着時にプログラム生成の発光・きらめきを表示し、ボールをフェードアウト
+- 画像または動画を中心から 0% → 100% に拡大表示
+- 画像は既定で4秒表示し、3秒目からフェードアウト
+- 動画は拡大開始と同時に音声付きで再生し、終了前に映像と音量をフェードアウト
+- 登録メディアは一巡するまで重複しないシャッフル方式
+- 連続ギフトはOverlay側で順番待ちし、現在の送信者名と待機件数を表示
+- メディア読み込み失敗時は失敗候補を除外し、ボール投擲から再実行
+- Effects LibraryとPresetの両方で画像・動画の候補リストを編集可能
+- ボール、軌道、発光、メディアサイズ、表示時間、動画音量、送信者名、キュー上限を設定可能
+- ボール未指定時は `apps/overlay/src/assets/ball-reveal-default.png` を使用
