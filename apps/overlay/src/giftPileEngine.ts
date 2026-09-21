@@ -13,6 +13,7 @@ export interface PileBody {
   imageUrl: string;
   expiresAt: number;
   opacity: number;
+  collisionProfile: readonly number[];
 }
 interface Batch {
   count: number;
@@ -21,11 +22,15 @@ interface Batch {
   opacity: number;
 }
 
+const COLLISION_PROFILE_STEPS = 64;
+const FULL_COLLISION_PROFILE = Array.from({ length: COLLISION_PROFILE_STEPS }, () => 1);
+
 export class GiftPileEngine {
   bodies: PileBody[] = [];
   private batches: Batch[] = [];
   private sequence = 0;
   private spawnBudget = 0;
+  private readonly collisionProfiles = new Map<string, readonly number[]>();
   maxObjects = 1000;
   constructor(private readonly random: () => number = Math.random) {}
 
@@ -57,6 +62,14 @@ export class GiftPileEngine {
     this.batches = [];
     this.spawnBudget = 0;
   }
+
+  setImageCollisionProfile(imageUrl: string, profile: readonly number[]): void {
+    if (profile.length !== COLLISION_PROFILE_STEPS) return;
+    const normalized = profile.map((value) => clamp(value, 0.08, 1));
+    this.collisionProfiles.set(imageUrl, normalized);
+    for (const body of this.bodies)
+      if (body.imageUrl === imageUrl) body.collisionProfile = normalized;
+  }
   get pendingCount(): number {
     return this.batches.reduce((sum, batch) => sum + batch.count, 0);
   }
@@ -79,32 +92,20 @@ export class GiftPileEngine {
         spin: (this.random() - 0.5) * 2,
         imageUrl: batch.imageUrl,
         expiresAt: now + GIFT_LIFETIME_MS,
-        opacity: batch.opacity
+        opacity: batch.opacity,
+        collisionProfile: this.collisionProfiles.get(batch.imageUrl) ?? FULL_COLLISION_PROFILE
       });
       this.spawnBudget -= 1;
       if (--batch.count <= 0) this.batches.shift();
-      this.trim(width, height);
+      this.trim();
     }
     const steps = Math.max(1, Math.ceil(dt * 120));
     for (let step = 0; step < steps; step++) this.simulate(dt / steps, width, height, now);
   }
 
-  private trim(width?: number, height?: number): void {
+  private trim(): void {
     if (this.bodies.length > this.maxObjects)
       this.bodies.splice(0, this.bodies.length - this.maxObjects);
-    if (!width || !height || !this.bodies.length) return;
-
-    // Count the space occupied by each actual gift. Using the largest diameter for
-    // every body made one large gift evict most of an otherwise small-gift pile.
-    const occupancyLimit = width * height * 1.2;
-    let occupancy = this.bodies.reduce(
-      (total, body) => total + (body.radius * 2) ** 2 * 0.9,
-      0
-    );
-    while (this.bodies.length > 1 && occupancy > occupancyLimit) {
-      const removed = this.bodies.shift()!;
-      occupancy -= (removed.radius * 2) ** 2 * 0.9;
-    }
   }
 
   private simulate(dt: number, width: number, height: number, now: number): void {
@@ -127,22 +128,26 @@ export class GiftPileEngine {
           cy = Math.floor(body.y / cell);
         for (let dx = -1; dx <= 1; dx++)
           for (let dy = -1; dy <= 1; dy++) {
-            for (const other of grid.get(`${cx + dx}:${cy + dy}`) ?? []) collide(body, other);
+            for (const other of grid.get(`${cx + dx}:${cy + dy}`) ?? [])
+              collide(body, other);
           }
         const key = `${cx}:${cy}`;
         const bucket = grid.get(key);
         if (bucket) bucket.push(body);
         else grid.set(key, [body]);
-        if (body.x < body.radius) {
-          body.x = body.radius;
+        const leftRadius = supportRadius(body, Math.PI);
+        const rightRadius = supportRadius(body, 0);
+        const floorRadius = supportRadius(body, Math.PI / 2);
+        if (body.x < leftRadius) {
+          body.x = leftRadius;
           body.vx = Math.abs(body.vx) * 0.18;
         }
-        if (body.x > width - body.radius) {
-          body.x = width - body.radius;
+        if (body.x > width - rightRadius) {
+          body.x = width - rightRadius;
           body.vx = -Math.abs(body.vx) * 0.18;
         }
-        if (body.y > height - body.radius) {
-          body.y = height - body.radius;
+        if (body.y > height - floorRadius) {
+          body.y = height - floorRadius;
           body.vy = body.vy > 55 ? -body.vy * 0.18 : Math.min(body.vy, 0);
           body.vx *= 0.88;
           body.spin = body.vx / body.radius;
@@ -168,7 +173,10 @@ export class GiftPileEngine {
 function collide(a: PileBody, b: PileBody): void {
   const dx = b.x - a.x,
     dy = b.y - a.y;
-  const minimum = a.radius + b.radius;
+  const broadMinimum = a.radius + b.radius;
+  if (Math.abs(dx) >= broadMinimum || Math.abs(dy) >= broadMinimum) return;
+  const angle = Math.atan2(dy, dx);
+  const minimum = supportRadius(a, angle) + supportRadius(b, angle + Math.PI);
   if (Math.abs(dx) >= minimum || Math.abs(dy) >= minimum) return;
   const distance = Math.hypot(dx, dy);
   if (distance >= minimum) return;
@@ -180,8 +188,12 @@ function collide(a: PileBody, b: PileBody): void {
   b.x += nx * correction;
   b.y += ny * correction;
   const velocity = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
-  if (velocity >= 0) return;
-  const impulse = -velocity * (Math.abs(velocity) > 55 ? 0.59 : 0.5);
+  const impactImpulse = velocity < 0 ? -velocity * (Math.abs(velocity) > 55 ? 0.62 : 0.52) : 0;
+  // A small overlap impulse lets gifts gently push one another aside instead of
+  // behaving like a rigid stack. The cap prevents deep piles from becoming unstable.
+  const separationImpulse = correction > 0.25 ? Math.min(6, correction * 0.35) : 0;
+  const impulse = impactImpulse + separationImpulse;
+  if (impulse <= 0) return;
   a.vx -= impulse * nx;
   a.vy -= impulse * ny;
   b.vx += impulse * nx;
@@ -194,6 +206,50 @@ function collide(a: PileBody, b: PileBody): void {
   b.vy -= nx * friction;
   a.spin *= 0.9;
   b.spin *= 0.9;
+}
+
+function supportRadius(
+  body: PileBody,
+  worldAngle: number
+): number {
+  const profile = body.collisionProfile;
+  const turn = ((worldAngle - body.angle) / (Math.PI * 2) + 1) % 1;
+  return body.radius * (profile[Math.round(turn * profile.length) % profile.length] ?? 1);
+}
+
+export function alphaCollisionProfile(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number
+): number[] {
+  const profile = Array.from({ length: COLLISION_PROFILE_STEPS }, () => 0);
+  if (width < 1 || height < 1 || pixels.length < width * height * 4) return FULL_COLLISION_PROFILE.slice();
+  const centerX = (width - 1) / 2;
+  const centerY = (height - 1) / 2;
+  const halfSize = Math.max(width, height) / 2;
+  let opaque = false;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (pixels[(y * width + x) * 4 + 3]! < 24) continue;
+      opaque = true;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const distance = Math.min(1, Math.hypot(dx, dy) / halfSize);
+      const turn = ((Math.atan2(dy, dx) / (Math.PI * 2)) + 1) % 1;
+      const index = Math.round(turn * COLLISION_PROFILE_STEPS) % COLLISION_PROFILE_STEPS;
+      profile[index] = Math.max(profile[index]!, distance);
+    }
+  }
+  if (!opaque) return FULL_COLLISION_PROFILE.slice();
+  // Fill narrow angular gaps caused by sampling while preserving broad transparent areas.
+  return profile.map((value, index) =>
+    Math.max(
+      value,
+      profile[(index + profile.length - 1) % profile.length]! * 0.96,
+      profile[(index + 1) % profile.length]! * 0.96,
+      0.08
+    )
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {

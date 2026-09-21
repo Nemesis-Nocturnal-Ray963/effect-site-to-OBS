@@ -1,6 +1,6 @@
 import React from "react";
 import type { EffectPlayMessage } from "@obs-effect/shared-types";
-import { GiftPileEngine, GIFT_FADE_MS } from "./giftPileEngine";
+import { alphaCollisionProfile, GiftPileEngine, GIFT_FADE_MS } from "./giftPileEngine";
 import fallbackGiftUrl from "./assets/gift-present.svg";
 
 export interface GiftPileHandle {
@@ -12,6 +12,7 @@ export const GiftPileLayer = React.forwardRef<GiftPileHandle>(function GiftPileL
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const engine = React.useRef(new GiftPileEngine());
   const images = React.useRef(new Map<string, HTMLImageElement>());
+  const measuredImages = React.useRef(new Set<string>());
   const seen = React.useRef(new Set<string>());
 
   React.useImperativeHandle(
@@ -52,6 +53,28 @@ export const GiftPileLayer = React.forwardRef<GiftPileHandle>(function GiftPileL
       let image = images.current.get(url);
       if (!image) {
         image = new Image();
+        image.onload = () => {
+          if (measuredImages.current.has(url)) return;
+          measuredImages.current.add(url);
+          try {
+            const sampleSize = 128;
+            const scale = Math.min(1, sampleSize / Math.max(image!.naturalWidth, image!.naturalHeight));
+            const width = Math.max(1, Math.round(image!.naturalWidth * scale));
+            const height = Math.max(1, Math.round(image!.naturalHeight * scale));
+            const sample = document.createElement("canvas");
+            sample.width = width;
+            sample.height = height;
+            const sampleContext = sample.getContext("2d", { willReadFrequently: true });
+            if (!sampleContext) return;
+            sampleContext.drawImage(image!, 0, 0, width, height);
+            engine.current.setImageCollisionProfile(
+              url,
+              alphaCollisionProfile(sampleContext.getImageData(0, 0, width, height).data, width, height)
+            );
+          } catch {
+            // Some external image hosts disallow pixel reads. Keep the safe circular fallback.
+          }
+        };
         image.onerror = () => {
           if (image!.src !== new URL(fallbackGiftUrl, location.href).href)
             image!.src = fallbackGiftUrl;

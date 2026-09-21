@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GiftPileEngine, GIFT_LIFETIME_MS as LIFE, GIFT_FADE_MS } from "./giftPileEngine";
+import { alphaCollisionProfile, GiftPileEngine, GIFT_LIFETIME_MS as LIFE, GIFT_FADE_MS } from "./giftPileEngine";
 
 function createEngine(): GiftPileEngine {
   let seed = 12345;
@@ -35,11 +35,11 @@ describe("gift pile", () => {
     expect(engine.bodies[0]?.expiresAt).toBe(3 * LIFE);
   });
 
-  it("replaces older gifts before large objects overflow a small screen", () => {
+  it("keeps gifts on a small screen until the configured object limit is reached", () => {
     const engine = createEngine();
     engine.add(10, "rose", 100, 1000, 0);
     for (let i = 0; i < 10; i++) engine.step(1 / 60, 200, 200, (i * 1000) / 60);
-    expect(engine.bodies.map((body) => body.id)).toEqual([6, 7, 8, 9, 10]);
+    expect(engine.bodies.map((body) => body.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
   it("does not treat every existing gift as the size of one large gift", () => {
@@ -56,6 +56,15 @@ describe("gift pile", () => {
     engine.add(1, "large-gift", 480, 1000, 0);
     engine.step(1 / 60, 1080, 1920, 0);
     expect(engine.bodies[0]?.radius).toBe(240);
+  });
+
+  it("removes transparent image margins from collision profiles", () => {
+    const pixels = new Uint8ClampedArray(100 * 100 * 4);
+    for (let y = 40; y < 60; y++)
+      for (let x = 40; x < 60; x++) pixels[(y * 100 + x) * 4 + 3] = 255;
+    const profile = alphaCollisionProfile(pixels, 100, 100);
+    expect(Math.max(...profile)).toBeLessThan(0.3);
+    expect(Math.min(...profile)).toBeGreaterThanOrEqual(0.08);
   });
 
   it("fades after expiry, never revives expired gifts, and clears queued gifts", () => {
