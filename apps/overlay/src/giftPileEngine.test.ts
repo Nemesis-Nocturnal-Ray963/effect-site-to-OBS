@@ -39,7 +39,23 @@ describe("gift pile", () => {
     const engine = createEngine();
     engine.add(10, "rose", 100, 1000, 0);
     for (let i = 0; i < 10; i++) engine.step(1 / 60, 200, 200, (i * 1000) / 60);
-    expect(engine.bodies.map((body) => body.id)).toEqual([7, 8, 9, 10]);
+    expect(engine.bodies.map((body) => body.id)).toEqual([6, 7, 8, 9, 10]);
+  });
+
+  it("does not treat every existing gift as the size of one large gift", () => {
+    const engine = createEngine();
+    engine.add(100, "small", 40, 1000, 0);
+    for (let i = 0; i < 100; i++) engine.step(1 / 60, 1080, 1920, 0);
+    engine.add(1, "large", 480, 1000, 1000);
+    engine.step(1 / 60, 1080, 1920, 1000);
+    expect(engine.bodies).toHaveLength(101);
+  });
+
+  it("keeps configured gift sizes above the former 160px limit", () => {
+    const engine = createEngine();
+    engine.add(1, "large-gift", 480, 1000, 0);
+    engine.step(1 / 60, 1080, 1920, 0);
+    expect(engine.bodies[0]?.radius).toBe(240);
   });
 
   it("fades after expiry, never revives expired gifts, and clears queued gifts", () => {

@@ -83,19 +83,12 @@ export function GiftPileOverridesEditor(props: {
             </div>
             <label>
               {t("Size (px)")}
-              <input
-                type="number"
-                min="16"
-                step="1"
+              <DeferredSizeInput
                 value={override.sizePx}
-                onChange={(event) =>
-                  save(
-                    overrides.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? { ...item, sizePx: clampSize(Number(event.target.value)) }
-                        : item
-                    )
-                  )
+                onCommit={(value) =>
+                  save(overrides.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, sizePx: clampSize(value) } : item
+                  ))
                 }
               />
             </label>
@@ -239,4 +232,28 @@ export function parseGiftSizeOverrides(value: unknown): GiftSizeOverride[] {
 
 function clampSize(value: number): number {
   return Math.round(Math.max(16, Number.isFinite(value) ? value : 88));
+}
+
+function DeferredSizeInput(props: { value: number; onCommit: (value: number) => void }): React.ReactElement {
+  const [draft, setDraft] = React.useState(String(props.value));
+
+  React.useEffect(() => setDraft(String(props.value)), [props.value]);
+
+  function commit(): void {
+    const value = Number(draft);
+    props.onCommit(Number.isFinite(value) ? value : props.value);
+  }
+
+  return (
+    <input
+      type="number"
+      step="1"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+    />
+  );
 }

@@ -53,20 +53,16 @@ export function GiftPileCoinRulesEditor(props: {
           </label>
           <label>
             {t("Size (px, blank uses default)")}
-            <input
-              type="number"
-              min="16"
-              step="1"
+            <DeferredOptionalSizeInput
               value={rule.sizePx ?? ""}
               placeholder={t("Default")}
-              onChange={(event) =>
+              onCommit={(value) =>
                 save(
                   rules.map((item, itemIndex) =>
                     itemIndex === index
                       ? {
                           ...item,
-                          sizePx:
-                            event.target.value === "" ? null : clampSize(Number(event.target.value))
+                          sizePx: value === null ? null : clampSize(value)
                         }
                       : item
                   )
@@ -176,4 +172,37 @@ function clampCoin(value: number): number {
 
 function clampSize(value: number): number {
   return Math.round(Math.max(16, Number.isFinite(value) ? value : 44));
+}
+
+function DeferredOptionalSizeInput(props: {
+  value: number | "";
+  placeholder: string;
+  onCommit: (value: number | null) => void;
+}): React.ReactElement {
+  const [draft, setDraft] = React.useState(String(props.value));
+
+  React.useEffect(() => setDraft(String(props.value)), [props.value]);
+
+  function commit(): void {
+    if (draft.trim() === "") {
+      props.onCommit(null);
+      return;
+    }
+    const value = Number(draft);
+    props.onCommit(Number.isFinite(value) ? value : null);
+  }
+
+  return (
+    <input
+      type="number"
+      step="1"
+      value={draft}
+      placeholder={props.placeholder}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+    />
+  );
 }

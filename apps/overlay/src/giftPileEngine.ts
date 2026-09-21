@@ -46,7 +46,7 @@ export class GiftPileEngine {
     this.batches.push({
       count: Math.floor(count),
       imageUrl,
-      size: clamp(size, 16, 160),
+      size: minimum(size, 16),
       opacity: clamp(opacity, 0, 1)
     });
     this.trim();
@@ -90,16 +90,21 @@ export class GiftPileEngine {
   }
 
   private trim(width?: number, height?: number): void {
-    let capacity = this.maxObjects;
-    if (width && height && this.bodies.length) {
-      const diameter = Math.max(...this.bodies.map((body) => body.radius * 2));
-      const screenCapacity = Math.max(
-        1,
-        Math.floor(width / diameter) * Math.floor(height / (diameter * 0.9))
-      );
-      capacity = Math.min(capacity, screenCapacity);
+    if (this.bodies.length > this.maxObjects)
+      this.bodies.splice(0, this.bodies.length - this.maxObjects);
+    if (!width || !height || !this.bodies.length) return;
+
+    // Count the space occupied by each actual gift. Using the largest diameter for
+    // every body made one large gift evict most of an otherwise small-gift pile.
+    const occupancyLimit = width * height * 1.2;
+    let occupancy = this.bodies.reduce(
+      (total, body) => total + (body.radius * 2) ** 2 * 0.9,
+      0
+    );
+    while (this.bodies.length > 1 && occupancy > occupancyLimit) {
+      const removed = this.bodies.shift()!;
+      occupancy -= (removed.radius * 2) ** 2 * 0.9;
     }
-    if (this.bodies.length > capacity) this.bodies.splice(0, this.bodies.length - capacity);
   }
 
   private simulate(dt: number, width: number, height: number, now: number): void {
@@ -193,4 +198,8 @@ function collide(a: PileBody, b: PileBody): void {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
+}
+
+function minimum(value: number, min: number): number {
+  return Math.max(min, Number.isFinite(value) ? value : min);
 }
