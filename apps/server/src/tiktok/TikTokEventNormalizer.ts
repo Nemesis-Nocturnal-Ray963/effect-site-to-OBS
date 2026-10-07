@@ -166,6 +166,18 @@ export class TikTokEventNormalizer {
       return [baseEvent(raw, "stream-end", { reason: text(raw.reason) ?? "stream-end" })];
     }
 
+    if (eventType === "livestatuschange" || eventType === "live-status-change") {
+      const status = text(raw.status) ?? text(raw.liveStatus) ?? text(raw.live_status) ?? text(raw.state) ?? text(raw.action);
+      const normalizedStatus = status?.toLowerCase();
+      const isLive = raw.isLive ?? raw.is_live ?? raw.live ?? raw.online;
+      const isStart = isLive === true || isLive === 1 || isLive === "1" || isLive === "true" || ["live", "online", "start", "started", "connected"].includes(normalizedStatus ?? "");
+      const isEnd = isLive === false || isLive === 0 || isLive === "0" || isLive === "false" || ["offline", "end", "ended", "disconnected"].includes(normalizedStatus ?? "");
+
+      if (isStart || isEnd) {
+        return [baseEvent(raw, isEnd ? "stream-end" : "stream-start", { status: status ?? isLive, sourceEvent: eventType })];
+      }
+    }
+
     if (eventType === "roomuser" || eventType === "viewer-count") {
       return [
         baseEvent(raw, "viewer-count", {

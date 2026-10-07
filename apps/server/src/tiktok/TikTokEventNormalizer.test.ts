@@ -15,3 +15,15 @@ describe("TikTok gift image normalization", () => {
     expect(event?.data.primaryGiftImageUrl).toBe("https://example.test/rose.png");
   });
 });
+
+describe("TikTok live status normalization", () => {
+  it("maps a live status event to stream start", () => {
+    const [event] = new TikTokEventNormalizer().normalize({ eventType: "liveStatusChange", status: "LIVE" });
+    expect(event?.type).toBe("stream-start");
+  });
+
+  it("maps an offline status event to stream end", () => {
+    const [event] = new TikTokEventNormalizer().normalize({ eventType: "liveStatusChange", status: "OFFLINE" });
+    expect(event?.type).toBe("stream-end");
+  });
+});

@@ -20,6 +20,7 @@ import { TikTokConnectionPage } from "../pages/TikTokConnectionPage";
 import { TikTokBrowserFramesPage } from "../pages/TikTokBrowserFramesPage";
 import { TikTokRawEventsPage } from "../pages/TikTokRawEventsPage";
 import { TimeTriggersPage } from "../pages/TimeTriggersPage";
+import { TimestampsPage } from "../pages/TimestampsPage";
 
 export function AppRoutes(): React.ReactElement {
   return (
@@ -35,6 +36,7 @@ export function AppRoutes(): React.ReactElement {
       <Route path="events/catalog" element={<EventCatalogPage />} />
       <Route path="events/test" element={<EventTestPage />} />
       <Route path="records/gifts" element={<GiftCatalogPage />} />
+      <Route path="records/timestamps" element={<TimestampsPage />} />
       <Route path="effects" element={<EffectsPage />} />
       <Route path="overlays" element={<OverlaysPage />} />
       <Route path="overlays/:overlayId/interact" element={<OverlayInteractionPage />} />

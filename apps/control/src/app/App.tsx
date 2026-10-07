@@ -2,6 +2,7 @@ import React from "react";
 import { AppRoutes } from "./router";
 import { AppLayout } from "../components/layout/AppLayout";
 import { I18nProvider } from "../i18n/I18nProvider";
+import { TimestampMonitoringProvider } from "../features/timestamps/TimestampMonitoringProvider";
 import { fetchSystemFonts } from "../services/httpApi";
 import { useConnectionStore } from "../stores/connectionStore";
 import { applyAppFontFamily, readAppFontFamily, registerUploadedFontFaces } from "../utils/appFont";
@@ -19,9 +20,11 @@ export function App(): React.ReactElement {
 
   return (
     <I18nProvider>
-      <AppLayout>
-        <AppRoutes />
-      </AppLayout>
+      <TimestampMonitoringProvider>
+        <AppLayout>
+          <AppRoutes />
+        </AppLayout>
+      </TimestampMonitoringProvider>
     </I18nProvider>
   );
 }

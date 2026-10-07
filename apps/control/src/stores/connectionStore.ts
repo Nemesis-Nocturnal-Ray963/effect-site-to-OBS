@@ -19,6 +19,13 @@ import type { UiLogEntry } from "@obs-effect/shared-types";
 
 export type SocketState = ControlSocketState;
 
+const receivedEventListeners = new Set<(entry: EventHistoryEntry) => void>();
+
+export function subscribeToReceivedEvents(listener: (entry: EventHistoryEntry) => void): () => void {
+  receivedEventListeners.add(listener);
+  return () => receivedEventListeners.delete(listener);
+}
+
 interface ConnectionStore {
   socketState: SocketState;
   status: ConnectionStatusMessage | null;
@@ -97,15 +104,17 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
         } else if (message.type === "tiktok:browser-frame-cleared") {
           set({ browserFrames: [], browserFrameStatus: message.frameStatus });
         } else if (message.type === "event:received") {
+          const entry: EventHistoryEntry = {
+            event: message.event,
+            processing: message.processing,
+            result: message.result,
+            createdAt: message.createdAt
+          };
+          for (const listener of receivedEventListeners) listener(entry);
           if (!get().paused) {
             set((state) => ({
               receivedEvents: [
-                {
-                  event: message.event,
-                  processing: message.processing,
-                  result: message.result,
-                  createdAt: message.createdAt
-                },
+                entry,
                 ...state.receivedEvents.filter((entry) => entry.event.eventId !== message.event.eventId)
               ].slice(0, 1000)
             }));

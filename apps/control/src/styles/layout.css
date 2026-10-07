@@ -107,6 +107,10 @@
   gap: 10px;
 }
 
+.header-microphone-button {
+  align-self: stretch;
+}
+
 .menu-button {
   display: none;
 }

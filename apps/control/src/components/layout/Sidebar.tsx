@@ -36,7 +36,10 @@ const sections: Array<{
   },
   {
     titleKey: "nav.records",
-    items: [{ labelKey: "nav.gifts", to: "/records/gifts" }]
+    items: [
+      { labelKey: "nav.gifts", to: "/records/gifts" },
+      { labelKey: "nav.timestamps", to: "/records/timestamps" }
+    ]
   },
   {
     titleKey: "nav.effects",

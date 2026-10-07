@@ -125,6 +125,278 @@
   font-size: 34px;
 }
 
+.timestamp-microphone-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.timestamp-volume-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.timestamp-microphone-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+.timestamp-microphone-controls label {
+  display: grid;
+  width: min(100%, 520px);
+  gap: 6px;
+  color: #c9cbc2;
+  font-size: 13px;
+}
+
+.timestamp-threshold-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 520px) 90px auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.timestamp-threshold-controls label {
+  display: grid;
+  gap: 6px;
+  color: #c9cbc2;
+  font-size: 13px;
+}
+
+.timestamp-threshold-controls > span {
+  padding-bottom: 10px;
+}
+
+.volume-meter {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 64px 120px;
+  gap: 14px;
+  align-items: center;
+}
+
+.volume-meter-track {
+  position: relative;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid #444641;
+  border-radius: 8px;
+  background: #111;
+}
+
+.volume-meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e 0%, #facc15 72%, #ef4444 100%);
+  transition: width 80ms linear;
+}
+
+.volume-threshold-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #f8fafc;
+  box-shadow: 0 0 5px #111;
+  transform: translateX(-1px);
+}
+
+.volume-meter > span {
+  color: #a8a8a0;
+  font-size: 13px;
+}
+
+.volume-meter.over-threshold strong,
+.volume-meter.over-threshold > span {
+  color: #fca5a5;
+}
+
+.recorded-timestamps {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid #303030;
+}
+
+.timestamp-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid #303030;
+}
+
+.timestamp-tabs button:not(.icon-button):not(.sidebar-backdrop) {
+  min-width: 0;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  color: #a8a8a0;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.timestamp-tabs button.active:not(.icon-button):not(.sidebar-backdrop) {
+  border-bottom-color: #7dd3fc;
+  color: #f7f7f2;
+  background: #272927;
+}
+
+.timestamp-calendar {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #3a3a37;
+  border-radius: 12px;
+  background: #181917;
+}
+
+.timestamp-calendar-header,
+.timestamp-calendar-footer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.timestamp-calendar-header strong {
+  text-align: center;
+  font-size: 17px;
+}
+
+.timestamp-calendar-header button:not(.icon-button):not(.sidebar-backdrop),
+.timestamp-calendar-days button:not(.icon-button):not(.sidebar-backdrop) {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0;
+}
+
+.timestamp-calendar-header button:not(.icon-button):not(.sidebar-backdrop) {
+  width: 38px;
+  font-size: 24px;
+}
+
+.timestamp-calendar-weekdays,
+.timestamp-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.timestamp-calendar-weekdays span {
+  color: #8f9188;
+  text-align: center;
+  font-size: 12px;
+}
+
+.timestamp-calendar-days button:not(.icon-button):not(.sidebar-backdrop) {
+  position: relative;
+  color: #777a73;
+  background: transparent;
+}
+
+.timestamp-calendar-days button.has-records:not(.icon-button):not(.sidebar-backdrop) {
+  color: #f7f7f2;
+  background: #272927;
+}
+
+.timestamp-calendar-days button.has-records::after {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #7dd3fc;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.timestamp-calendar-days button.selected:not(.icon-button):not(.sidebar-backdrop) {
+  outline: 2px solid #7dd3fc;
+  background: #22313a;
+}
+
+.timestamp-calendar-days button.outside-month {
+  opacity: 0.35;
+}
+
+.timestamp-calendar-footer {
+  grid-template-columns: auto 1fr;
+  padding-top: 6px;
+  border-top: 1px solid #303030;
+}
+
+.timestamp-calendar-footer button:not(.icon-button):not(.sidebar-backdrop) {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.timestamp-calendar-footer button.active:not(.icon-button):not(.sidebar-backdrop) {
+  outline: 2px solid #7dd3fc;
+}
+
+.timestamp-calendar-footer span {
+  color: #a8a8a0;
+  text-align: right;
+  font-size: 13px;
+}
+
+.recorded-timestamps ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: timestamp-row;
+}
+
+.recorded-timestamps li {
+  counter-increment: timestamp-row;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #303030;
+  border-radius: 8px;
+  background: #181917;
+}
+
+.recorded-timestamps li::before {
+  content: counter(timestamp-row);
+  color: #7dd3fc;
+  font-weight: 700;
+}
+
+.recorded-timestamps li span {
+  color: #a8a8a0;
+  font-variant-numeric: tabular-nums;
+}
+
+.recorded-timestamps li strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timestamp-empty {
+  padding: 16px;
+  border: 1px dashed #3a3a37;
+  border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+  .timestamp-threshold-controls,
+  .volume-meter {
+    grid-template-columns: 1fr auto;
+  }
+
+  .timestamp-threshold-controls > input,
+  .volume-meter-track {
+    grid-column: 1 / -1;
+  }
+}
+
 .preset-page-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
