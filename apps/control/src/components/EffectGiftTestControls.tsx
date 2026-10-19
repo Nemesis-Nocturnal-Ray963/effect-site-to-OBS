@@ -65,7 +65,7 @@ export function EffectGiftTestControls(props: {
           void props.onTest({
             gift: {
               platformGiftId: testGift?.platformGiftId,
-              name: testGift?.name,
+              name: testGift?.matchName ?? testGift?.name,
               coinValue,
               imageUrl: testGift?.image.primaryUrl
             }

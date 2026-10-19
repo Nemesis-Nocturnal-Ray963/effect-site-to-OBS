@@ -21,7 +21,7 @@ import {
   fetchAssets,
   fetchEffectDefinitions,
   fetchEffectConfigurations,
-  fetchGifts,
+  fetchAllGifts,
   fetchOverlays,
   fetchPresets,
   fetchSystemFonts,
@@ -87,7 +87,7 @@ export function PresetsPage(): React.ReactElement {
       fetchEffectConfigurations(),
       fetchAssets(),
       fetchOverlays(),
-      fetchGifts({ sort: "lastSeenAt", order: "desc", limit: 300 }),
+      fetchAllGifts({ sort: "lastSeenAt", order: "desc" }),
       fetchSystemFonts()
     ]);
     setPresets(nextPresets);
@@ -363,7 +363,7 @@ function PresetTestPanel(props: {
     try {
       const result = await testPreset(props.preset.id, {
         platformGiftId: selectedGift.platformGiftId,
-        name: selectedGift.name,
+        name: selectedGift.matchName ?? selectedGift.name,
         coinValue: giftCoinValue(selectedGift) ?? 0,
         imageUrl: selectedGift.image.primaryUrl
       });
@@ -595,8 +595,14 @@ function SlotEditor(props: {
               <input
                 value={condition.platformGiftId}
                 placeholder={t("Enter gift ID manually")}
-                onChange={(event) => void patchCondition({ ...condition, platformGiftId: event.target.value })}
+                onChange={(event) => void patchCondition({ ...condition, giftCatalogId: undefined, platformGiftId: event.target.value })}
               />
+            </label>
+            <label>
+              {t("Effect matching name")}
+              <input value={condition.giftName ?? selectedGift?.matchName ?? ""}
+                onChange={(event) => void patchCondition({ ...condition, giftCatalogId: undefined, giftName: event.target.value })} />
+              <small>{t("ID or matching name triggers this effect.")}</small>
             </label>
             {giftPickerOpen ? (
               <div className="preset-gift-picker-backdrop" role="dialog" aria-modal="true" aria-label={t("Choose recorded gift")}>
@@ -645,7 +651,7 @@ function SlotEditor(props: {
                           type="button"
                           className={`preset-gift-tile ${gift.platformGiftId === condition.platformGiftId ? "selected" : ""}`}
                           onClick={() => {
-                            void patchCondition({ ...condition, platformGiftId: gift.platformGiftId });
+                            void patchCondition({ ...condition, giftCatalogId: gift.id, platformGiftId: gift.platformGiftId, giftName: gift.matchName ?? gift.name });
                             setGiftPickerOpen(false);
                           }}
                         >

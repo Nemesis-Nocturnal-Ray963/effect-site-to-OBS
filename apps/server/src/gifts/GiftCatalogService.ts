@@ -45,6 +45,15 @@ export class GiftCatalogService {
     return this.repository.list(query);
   }
 
+  async listAll(): Promise<GiftCatalogRecord[]> {
+    const records: GiftCatalogRecord[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const batch = await this.repository.list({ limit: 1000, offset, sort: "name", order: "asc" });
+      records.push(...batch);
+      if (batch.length < 1000) return records;
+    }
+  }
+
   get(id: string): Promise<GiftCatalogRecord | null> {
     return this.repository.getById(id);
   }
@@ -53,7 +62,7 @@ export class GiftCatalogService {
     return this.repository.getByPlatformGiftId("tiktok", platformGiftId);
   }
 
-  async createManual(input: { platformGiftId?: string; name: string; coinValue?: number | null; primaryImageUrl?: string | null }): Promise<GiftCatalogRecord> {
+  async createManual(input: { platformGiftId?: string; name: string; matchName?: string; coinValue?: number | null; primaryImageUrl?: string | null }): Promise<GiftCatalogRecord> {
     const platformGiftId = input.platformGiftId?.trim() || `manual-${randomUUID()}`;
     const existing = await this.repository.getByPlatformGiftId("tiktok", platformGiftId);
     if (existing) throw new Error("Gift ID already exists");
@@ -69,6 +78,7 @@ export class GiftCatalogService {
       incrementSeenCount: false
     });
     const record = await this.repository.update(created.id, {
+      matchName: input.matchName?.trim() || input.name.trim(),
       name: input.name,
       coinValue: input.coinValue,
       diamondValue: input.coinValue,
@@ -91,7 +101,7 @@ export class GiftCatalogService {
   }
 
   async stats(): Promise<GiftCatalogStats> {
-    const records = await this.repository.list({ limit: 1000, sort: "lastSeenAt", order: "desc" });
+    const records = await this.listAll();
     return {
       total: records.length,
       withImage: records.filter((record) => Boolean(record.image.primaryUrl)).length,
@@ -99,7 +109,7 @@ export class GiftCatalogService {
       withCoinValue: records.filter((record) => record.coinValue !== null || record.diamondValue !== null).length,
       missingValue: records.filter((record) => record.diamondValue === null && record.coinValue === null).length,
       imageCacheFailed: records.filter((record) => record.image.cacheStatus === "failed").length,
-      lastDiscoveredAt: records[0]?.lastSeenAt ?? null
+      lastDiscoveredAt: records.reduce<string | null>((latest, record) => !latest || record.lastSeenAt > latest ? record.lastSeenAt : latest, null)
     };
   }
 }

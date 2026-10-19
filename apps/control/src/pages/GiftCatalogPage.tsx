@@ -10,13 +10,14 @@ import {
   createGift,
   fetchAssets,
   fetchGiftStats,
-  fetchGifts,
+  fetchAllGifts,
   updateGift
 } from "../services/httpApi";
 
 const columns = [
   "Image",
   "Name",
+  "Effect matching name",
   "Gift ID",
   "Coin",
   "First Seen",
@@ -52,6 +53,7 @@ export function GiftCatalogPage(): React.ReactElement {
   const [status, setStatus] = React.useState("");
   const [form, setForm] = React.useState({
     name: "",
+    matchName: "",
     coinValue: "",
     primaryImageUrl: "",
     isActive: true
@@ -59,18 +61,18 @@ export function GiftCatalogPage(): React.ReactElement {
   const [manualForm, setManualForm] = React.useState({
     platformGiftId: "",
     name: "",
+    matchName: "",
     coinValue: "",
     primaryImageUrl: ""
   });
 
   const load = React.useCallback(async (): Promise<void> => {
     const [nextGifts, nextStats] = await Promise.all([
-      fetchGifts({
+      fetchAllGifts({
         search,
         sort,
         order: sort === "name" ? "asc" : "desc",
-        cacheStatus: cacheStatus === "all" ? undefined : cacheStatus,
-        limit: 300
+        cacheStatus: cacheStatus === "all" ? undefined : cacheStatus
       }),
       fetchGiftStats()
     ]);
@@ -92,6 +94,7 @@ export function GiftCatalogPage(): React.ReactElement {
     if (!selected) return;
     setForm({
       name: selected.name,
+      matchName: selected.matchName ?? selected.name,
       coinValue: coinValue(selected) === null ? "" : String(coinValue(selected)),
       primaryImageUrl: selected.image.primaryUrl ?? "",
       isActive: selected.isActive
@@ -115,6 +118,7 @@ export function GiftCatalogPage(): React.ReactElement {
     try {
       const updated = await updateGift(selected.id, {
         name: form.name,
+        matchName: form.matchName.trim(),
         diamondValue: form.coinValue === "" ? null : Number(form.coinValue),
         coinValue: form.coinValue === "" ? null : Number(form.coinValue),
         primaryImageUrl: form.primaryImageUrl || null,
@@ -135,10 +139,11 @@ export function GiftCatalogPage(): React.ReactElement {
       const created = await createGift({
         platformGiftId: manualForm.platformGiftId.trim() || undefined,
         name: manualForm.name.trim(),
+        matchName: manualForm.matchName.trim() || manualForm.name.trim(),
         coinValue: manualForm.coinValue === "" ? null : Number(manualForm.coinValue),
         primaryImageUrl: manualForm.primaryImageUrl.trim() || null
       });
-      setManualForm({ platformGiftId: "", name: "", coinValue: "", primaryImageUrl: "" });
+      setManualForm({ platformGiftId: "", name: "", matchName: "", coinValue: "", primaryImageUrl: "" });
       await load();
       setSelected(created);
       setStatus(t("Saved"));
@@ -181,12 +186,18 @@ export function GiftCatalogPage(): React.ReactElement {
           </p>
         </div>
         <label>
-          {t("Name")}
+          {t("Picker display name")}
           <input
             required
             value={manualForm.name}
             onChange={(event) => setManualForm({ ...manualForm, name: event.target.value })}
           />
+        </label>
+        <label>
+          {t("Effect matching name")}
+          <input value={manualForm.matchName} placeholder={t("Defaults to display name")}
+            onChange={(event) => setManualForm({ ...manualForm, matchName: event.target.value })} />
+          <small>{t("Enter the gift name received from the platform. ID or name matching triggers effects.")}</small>
         </label>
         <label>
           {t("Gift ID")}
@@ -351,6 +362,7 @@ export function GiftCatalogPage(): React.ReactElement {
                         )}
                       </td>
                       <td>{gift.name}</td>
+                      <td>{gift.matchName || "-"}</td>
                       <td>{gift.platformGiftId}</td>
                       <td>{valueText(coinValue(gift))}</td>
                       <td>{formatDate(gift.firstSeenAt)}</td>
@@ -397,11 +409,16 @@ export function GiftCatalogPage(): React.ReactElement {
           </dl>
           <div className="form-grid">
             <label>
-              {t("Name")}
+              {t("Picker display name")}
               <input
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
               />
+            </label>
+            <label>
+              {t("Effect matching name")}
+              <input value={form.matchName} onChange={(event) => setForm({ ...form, matchName: event.target.value })} />
+              <small>{t("Enter the gift name received from the platform. ID or name matching triggers effects.")}</small>
             </label>
             <label>
               {t("Coin")}

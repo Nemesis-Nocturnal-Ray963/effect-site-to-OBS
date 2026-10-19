@@ -48,6 +48,7 @@ export class GiftExtractor {
     const data = event.data;
     const platformGiftId =
       stringId(data.giftId) ??
+      stringId(data.platformGiftId) ??
       stringId(data.gift_id) ??
       stringId((data.gift as Record<string, unknown> | undefined)?.id) ??
       stringId((data.gift as Record<string, unknown> | undefined)?.id_str) ??
@@ -59,6 +60,7 @@ export class GiftExtractor {
     const name = text(data.giftName) ?? text(data.gift_name) ?? text((data.gift as Record<string, unknown> | undefined)?.name);
     const imageUrls = [
       text(data.primaryGiftImageUrl),
+      text(data.imageUrl),
       ...imageUrlsFrom(data.giftImageUrls),
       ...imageUrlsFrom(data.giftPicture),
       ...imageUrlsFrom(data.gift),

@@ -22,6 +22,7 @@ const querySchema = z.object({
 });
 
 const patchSchema = z.object({
+  matchName: z.string().trim().max(200).optional(),
   name: z.string().min(1).max(200).optional(),
   diamondValue: z.number().int().nonnegative().nullable().optional(),
   coinValue: z.number().int().nonnegative().nullable().optional(),
@@ -30,6 +31,7 @@ const patchSchema = z.object({
 });
 
 const manualGiftSchema = z.object({
+  matchName: z.string().trim().max(200).optional(),
   platformGiftId: z.string().max(200).optional(),
   name: z.string().trim().min(1).max(200),
   coinValue: z.number().int().nonnegative().nullable().optional(),

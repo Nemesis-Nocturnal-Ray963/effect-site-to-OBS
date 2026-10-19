@@ -166,6 +166,7 @@ export type EffectTriggerCondition =
       giftCatalogId?: string;
       platform: GiftPlatform;
       platformGiftId: string;
+      giftName?: string;
       minimumRepeatCount?: number;
       triggerOn: "gift" | "streak-start" | "streak-end";
     }
@@ -985,6 +986,8 @@ export interface GiftCatalogRecord {
   platform: GiftPlatform;
   platformGiftId: string;
   name: string;
+  /** Name received from the platform, used for effect matching. name is the picker label. */
+  matchName?: string;
   aliases: string[];
   diamondValue: number | null;
   coinValue: number | null;

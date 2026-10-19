@@ -31,6 +31,7 @@ export interface GiftCatalogUpsertInput {
 
 export interface GiftCatalogPatch {
   name?: string;
+  matchName?: string;
   diamondValue?: number | null;
   coinValue?: number | null;
   primaryImageUrl?: string | null;

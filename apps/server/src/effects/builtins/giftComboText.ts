@@ -1,6 +1,6 @@
 import type { AppAudioComboMessage, AssetCatalogItem, EffectConfiguration, EffectDefinition, NormalizedEvent, RuntimeEffectObject } from "@obs-effect/shared-types";
 import { loadCatalog } from "../../api/routes/assets.js";
-import { giftIdMatchesAny } from "../../gifts/giftAliases.js";
+import { giftIdMatchesAny, giftMatches } from "../../gifts/giftAliases.js";
 import type { RuntimeInteractionService } from "../../runtime/RuntimeInteractionService.js";
 
 export const giftComboTextEffectDefinition: EffectDefinition = {
@@ -236,6 +236,7 @@ function normalizeSettings(parameters: Record<string, unknown>) {
   return {
     targetMode: stringParam(parameters.targetMode, "any-gift"),
     giftIds: csv(parameters.giftIdsCsv),
+    giftSelectionsJson: stringParam(parameters.giftSelectionsJson, "[]"),
     acceptanceDurationMs: Math.max(1, integerParam(parameters.acceptanceDurationMs, 3000)),
     countSpeedMode: stringParam(parameters.countSpeedMode, "accelerating"),
     constantAddsPerSecond: Math.max(1, numberParam(parameters.constantAddsPerSecond, 20)),
@@ -278,7 +279,14 @@ function giftComboQuantity(event: NormalizedEvent, settings: ReturnType<typeof n
   if (!["gift", "gift-streak-start", "gift-streak-end"].includes(event.type)) return 0;
   if (settings.targetMode === "specific-gifts") {
     const eventGiftId = String(event.data.giftId ?? event.data.platformGiftId ?? "");
-    if (!giftIdMatchesAny(event.platform, settings.giftIds, eventGiftId)) return 0;
+    let nameMatches = false;
+    try {
+      const selections: unknown = JSON.parse(settings.giftSelectionsJson);
+      nameMatches = Array.isArray(selections) && selections.some((item) =>
+        item && typeof item.giftId === "string" && settings.giftIds.includes(item.giftId) && giftMatches(event, item.giftId, item.giftName)
+      );
+    } catch { /* Fall back to legacy IDs. */ }
+    if (!nameMatches && !giftIdMatchesAny(event.platform, settings.giftIds, eventGiftId)) return 0;
   }
   return clamp(integerParam(event.data.normalizedGiftQuantity, integerParam(event.data.repeatCount, 1)), 1, 100000);
 }

@@ -192,6 +192,11 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "tikfinityEndpointHelp": "Local WebSocket endpoint exposed by TikFinity Desktop. The default is ws://localhost:21213/."
   },
   ja: {
+    "Picker display name": "ピッカー表示名",
+    "Effect matching name": "演出照合用ギフト名",
+    "Defaults to display name": "未入力の場合は表示名を使用",
+    "Enter the gift name received from the platform. ID or name matching triggers effects.": "受信イベントのギフト名を入力してください。IDまたは照合名の一致で演出が反応します。",
+    "ID or matching name triggers this effect.": "IDまたは照合用ギフト名のどちらかが一致すると反応します。",
     "Gift object size (px)": "ギフト物体の大きさ（px）",
     "Maximum accumulated gifts": "蓄積するギフトの上限",
     "Gift-specific sizes": "ギフト別サイズ設定",

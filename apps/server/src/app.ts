@@ -50,6 +50,7 @@ import { registerRawCaptureRoutes } from "./api/routes/rawCaptures.js";
 import { BrowserFrameStore } from "./tiktok/browser/BrowserFrameStore.js";
 import { registerTikTokBrowserRoutes } from "./api/routes/tiktokBrowser.js";
 import { GiftCatalogJsonRepository } from "./gifts/GiftCatalogJsonRepository.js";
+import { importStandardGiftCatalog } from "./gifts/standardGiftCatalog.js";
 import { GiftCatalogService } from "./gifts/GiftCatalogService.js";
 import { registerGiftRoutes } from "./api/routes/gifts.js";
 import { RuntimeEffectObjectStore } from "./runtime/RuntimeEffectObjectStore.js";
@@ -124,7 +125,7 @@ export async function createApp(options: CreateAppOptions) {
   const overlayRegistry = new OverlayRegistry();
   const overlayConfigurationRepository = OverlayConfigurationJsonRepository.fromRoot(rootDir);
   overlayRegistry.applyConfigurations(await overlayConfigurationRepository.list());
-  const effectConfigurationService = new EffectConfigurationService(EffectConfigurationJsonRepository.fromRoot(rootDir), () => now());
+  const effectConfigurationService = new EffectConfigurationService(EffectConfigurationJsonRepository.fromRoot(rootDir), () => now(), () => giftCatalogService.listAll());
   const presetService = new PresetService(PresetJsonRepository.fromRoot(rootDir), () => now());
   const runtimeStore = new RuntimeEffectObjectStore();
   const eventBus = new EventBus();
@@ -134,8 +135,13 @@ export async function createApp(options: CreateAppOptions) {
   const logBuffer = new UiLogBuffer({ maxEntries: 1000 });
   const rawCaptureStore = new TikTokRawEventStore(1000);
   const browserFrameStore = new BrowserFrameStore(1000);
+  const giftCatalogRepository = GiftCatalogJsonRepository.fromRoot(rootDir);
+  const standardGiftImport = await importStandardGiftCatalog(rootDir, giftCatalogRepository);
+  if (standardGiftImport && !standardGiftImport.skipped) {
+    app.log.info(standardGiftImport, "Standard gift catalog merged; existing user settings preserved");
+  }
   const giftCatalogService = new GiftCatalogService({
-    repository: GiftCatalogJsonRepository.fromRoot(rootDir),
+    repository: giftCatalogRepository,
     onCreated: (gift) => {
       broadcastToControl({ type: "gift:catalog-created", gift, createdAt: now() });
       broadcastGiftStats();
@@ -326,6 +332,7 @@ export async function createApp(options: CreateAppOptions) {
     event: NormalizedEvent,
     triggerType?: string
   ): Promise<void> {
+    configuration = await effectConfigurationService.resolveGifts(configuration);
     if (configuration.effectDefinitionId === "ball-reveal") {
       await executeBallReveal(configuration, event, triggerType);
       return;
@@ -839,8 +846,8 @@ export async function createApp(options: CreateAppOptions) {
   await registerEffectRoutes(app, effectConfigurationService, overlayConnectionManager, now, {
     executeFallingImage: (configuration, event) => fallingImageEffectService!.execute(configuration, event),
     executePitchingMachineBall: (configuration, event) => pitchingMachineBallEffectService!.execute(configuration, event),
-    executeGiftComboText: (configuration, event) => giftComboTextEffectService!.execute(configuration, event),
-    executeGiftPile: (configuration, event) => giftPileEffectService!.execute(configuration, event),
+    executeGiftComboText: async (configuration, event) => giftComboTextEffectService!.execute(await effectConfigurationService.resolveGifts(configuration), event),
+    executeGiftPile: async (configuration, event) => giftPileEffectService!.execute(await effectConfigurationService.resolveGifts(configuration), event),
     executePuyoGame: (configuration, event) => puyoGameEffectService!.execute(configuration, event),
     executeBallReveal,
     resolveMedia: resolveEffectMedia

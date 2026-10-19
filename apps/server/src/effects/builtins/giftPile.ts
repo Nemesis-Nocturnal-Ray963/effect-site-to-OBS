@@ -6,7 +6,7 @@ import type {
   NormalizedEvent,
   OverlayId
 } from "@obs-effect/shared-types";
-import { samePlatformGiftId } from "../../gifts/giftAliases.js";
+import { giftMatches } from "../../gifts/giftAliases.js";
 
 export const giftPileEffectDefinition: EffectDefinition = {
   id: "gift-pile",
@@ -195,8 +195,7 @@ export function resolveGiftObjectSize(
 ): number {
   const fallback = clampSize(parameters.objectSizePx, 44);
   if (!event) return fallback;
-  const giftId = String(event.data.giftId ?? event.data.platformGiftId ?? "").trim();
-  if (giftId && typeof parameters.giftSizeOverridesJson === "string") {
+  if (typeof parameters.giftSizeOverridesJson === "string") {
     try {
       const parsed = JSON.parse(parameters.giftSizeOverridesJson) as unknown;
       if (Array.isArray(parsed)) {
@@ -204,10 +203,10 @@ export function resolveGiftObjectSize(
           (item) =>
             item &&
             typeof item === "object" &&
-            samePlatformGiftId(
-              event.platform,
+            giftMatches(
+              event,
               String((item as Record<string, unknown>).giftId ?? ""),
-              giftId
+              typeof (item as Record<string, unknown>).giftName === "string" ? (item as { giftName: string }).giftName : undefined
             )
         ) as Record<string, unknown> | undefined;
         if (match) return clampSize(match.sizePx, fallback);

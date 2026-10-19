@@ -89,7 +89,7 @@ export async function registerEffectRoutes(
     executeFallingImage?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executePitchingMachineBall?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executeGiftComboText?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
-    executeGiftPile?: (configuration: EffectConfiguration, event?: NormalizedEvent) => { spawnedObjectCount: number; skipped: boolean };
+    executeGiftPile?: (configuration: EffectConfiguration, event?: NormalizedEvent) => { spawnedObjectCount: number; skipped: boolean } | Promise<{ spawnedObjectCount: number; skipped: boolean }>;
     executePuyoGame?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executeBallReveal?: (configuration: EffectConfiguration, event?: NormalizedEvent, triggerType?: string) => Promise<{ skipped: boolean; reason?: string; instanceId?: string; mediaCount?: number }>;
     resolveMedia?: (configuration: EffectConfiguration) => Promise<ResolvedEffectMedia>;
@@ -211,7 +211,7 @@ export async function registerEffectRoutes(
       };
     }
     if (configuration.effectDefinitionId === "gift-pile" && options?.executeGiftPile) {
-      const result = options.executeGiftPile(configuration, giftTestEvent);
+      const result = await options.executeGiftPile(configuration, giftTestEvent);
       return { accepted: !result.skipped, triggeredEffects: ["gift-pile"], targetOverlayId: configuration.targetOverlayId, spawnedObjectCount: result.spawnedObjectCount };
     }
     if (configuration.effectDefinitionId === "puyo-game" && options?.executePuyoGame) {

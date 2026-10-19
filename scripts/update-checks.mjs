@@ -110,6 +110,23 @@ test("ZIP update preserves settings, database, images and env; backs up old depe
   assert.equal(JSON.parse(await read(options.root, ".updates/installed.json")).commit, "new");
 });
 
+test("ZIP update distributes standard gifts without replacing the user's gift catalog", async (t) => {
+  const options = await fixture(t);
+  const standard = await fs.readFile(new URL("../apps/server/catalogs/standard-gifts.json", import.meta.url), "utf8");
+  const previousVersion = JSON.parse(standard).previousVersion;
+  const historyName = previousVersion ? `apps/server/catalogs/history/${previousVersion}.json` : undefined;
+  const history = historyName ? await fs.readFile(new URL(`../${historyName}`, import.meta.url), "utf8") : undefined;
+  const userCatalog = JSON.stringify({ records: [{ id: "my-gift", name: "My edited gift" }] });
+  await write(options.candidate, "apps/server/catalogs/standard-gifts.json", standard);
+  if (historyName) await write(options.candidate, historyName, history);
+  await write(options.root, "data/gifts/catalog.json", userCatalog);
+  await applyUpdate({ ...options, install });
+  assert.equal(await read(options.root, "apps/server/catalogs/standard-gifts.json"), standard);
+  if (historyName) assert.equal(await read(options.root, historyName), history);
+  assert.equal(await read(options.root, "data/gifts/catalog.json"), userCatalog);
+  assert.equal(await read(options.backup, "data/gifts/catalog.json"), userCatalog);
+});
+
 test("failed ZIP build restores the exact old source, dependencies and build without overwriting data", async (t) => {
   const options = await fixture(t);
   await assert.rejects(

@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/I18nProvider";
 
 interface GiftSizeOverride {
   giftId: string;
+  giftName?: string;
   sizePx: number;
 }
 
@@ -106,7 +107,7 @@ export function GiftPileOverridesEditor(props: {
         disabled={available.length === 0}
         onClick={() => {
           const gift = available[0];
-          if (gift) save([...overrides, { giftId: gift.platformGiftId, sizePx: 88 }]);
+          if (gift) save([...overrides, { giftId: gift.platformGiftId, giftName: gift.matchName ?? gift.name, sizePx: 88 }]);
         }}
       >
         {t("Add gift size rule")}
@@ -180,7 +181,7 @@ export function GiftPileOverridesEditor(props: {
                       save(
                         overrides.map((item, itemIndex) =>
                           itemIndex === pickerIndex
-                            ? { ...item, giftId: gift.platformGiftId }
+                            ? { ...item, giftId: gift.platformGiftId, giftName: gift.matchName ?? gift.name }
                             : item
                         )
                       );
@@ -222,7 +223,7 @@ export function parseGiftSizeOverrides(value: unknown): GiftSizeOverride[] {
       const giftId = typeof candidate.giftId === "string" ? candidate.giftId.trim() : "";
       if (!giftId || typeof candidate.sizePx !== "number" || !Number.isFinite(candidate.sizePx))
         continue;
-      unique.set(giftId, { giftId, sizePx: clampSize(candidate.sizePx) });
+      unique.set(giftId, { giftId, giftName: typeof candidate.giftName === "string" ? candidate.giftName : undefined, sizePx: clampSize(candidate.sizePx) });
     }
     return [...unique.values()];
   } catch {

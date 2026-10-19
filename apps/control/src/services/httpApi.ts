@@ -237,6 +237,15 @@ export async function fetchGiftStats(): Promise<GiftCatalogStats> {
   return data.stats;
 }
 
+export async function fetchAllGifts(params: Omit<Parameters<typeof fetchGifts>[0], "limit" | "offset">): Promise<GiftCatalogRecord[]> {
+  const records: GiftCatalogRecord[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const batch = await fetchGifts({ ...params, offset, limit: 1000 });
+    records.push(...batch);
+    if (batch.length < 1000) return records;
+  }
+}
+
 export async function fetchGift(id: string): Promise<GiftCatalogRecord> {
   const response = await fetch(`/api/v1/gifts/${encodeURIComponent(id)}`);
   if (!response.ok) throw new Error("Failed to load gift");
@@ -246,7 +255,7 @@ export async function fetchGift(id: string): Promise<GiftCatalogRecord> {
 
 export async function updateGift(
   id: string,
-  patch: Partial<Pick<GiftCatalogRecord, "name" | "diamondValue" | "coinValue" | "isActive">> & { primaryImageUrl?: string | null }
+  patch: Partial<Pick<GiftCatalogRecord, "name" | "matchName" | "diamondValue" | "coinValue" | "isActive">> & { primaryImageUrl?: string | null }
 ): Promise<GiftCatalogRecord> {
   const response = await fetch(`/api/v1/gifts/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -261,6 +270,7 @@ export async function updateGift(
 export async function createGift(input: {
   platformGiftId?: string;
   name: string;
+  matchName?: string;
   coinValue?: number | null;
   primaryImageUrl?: string | null;
 }): Promise<GiftCatalogRecord> {

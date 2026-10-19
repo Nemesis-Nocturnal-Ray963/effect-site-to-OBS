@@ -14,7 +14,9 @@ import type {
 } from "@obs-effect/shared-types";
 import type { ResolvedEffectMedia } from "@obs-effect/shared-types";
 import { defaultOverlayId } from "../overlays/overlayTypes.js";
-import { samePlatformGiftId } from "../gifts/giftAliases.js";
+import { giftMatches } from "../gifts/giftAliases.js";
+import { resolveEffectGifts } from "../gifts/resolveEffectGifts.js";
+import type { GiftCatalogRecord } from "@obs-effect/shared-types";
 import type { EffectConfigurationJsonRepository } from "./EffectConfigurationJsonRepository.js";
 import { findEffectDefinition } from "./effectDefinitions.js";
 
@@ -54,7 +56,8 @@ export class EffectConfigurationService {
 
   constructor(
     private readonly repository: EffectConfigurationJsonRepository,
-    private readonly now: () => string
+    private readonly now: () => string,
+    private readonly listGifts: () => Promise<GiftCatalogRecord[]> = async () => []
   ) {}
 
   async list(): Promise<EffectConfiguration[]> {
@@ -192,8 +195,13 @@ export class EffectConfigurationService {
     await this.repository.saveAll((await this.list()).filter((configuration) => configuration.presetId !== presetId));
   }
 
+  async resolveGifts(configuration: EffectConfiguration): Promise<EffectConfiguration> {
+    return resolveEffectGifts(configuration, await this.listGifts());
+  }
+
   async match(event: NormalizedEvent): Promise<EffectConfiguration[]> {
-    const configurations = await this.list();
+    const gifts = await this.listGifts();
+    const configurations = (await this.list()).map((configuration) => resolveEffectGifts(configuration, gifts));
     return configurations.filter((configuration) =>
       configuration.enabled && configuration.presetId && matchesTrigger(configuration.trigger,
         configuration.effectDefinitionId === "gift-pile" && (event.type === "gift-streak-start" || event.type === "gift-streak-update")
@@ -372,8 +380,8 @@ function matchesCondition(condition: EffectTriggerCondition, event: NormalizedEv
     return (
       matchesGiftTiming(event.type, condition.triggerOn) &&
       event.platform === condition.platform &&
-      samePlatformGiftId(event.platform, String(event.data.giftId ?? event.data.platformGiftId ?? ""), condition.platformGiftId) &&
-      numeric(event.data.repeatCount) >= (condition.minimumRepeatCount ?? 1)
+      giftMatches(event, condition.platformGiftId, condition.giftName) &&
+      (typeof event.data.repeatCount === "number" ? numeric(event.data.repeatCount) : 1) >= (condition.minimumRepeatCount ?? 1)
     );
   }
   if (condition.type === "gift-value") {

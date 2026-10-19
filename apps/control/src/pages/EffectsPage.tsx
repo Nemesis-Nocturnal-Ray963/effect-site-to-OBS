@@ -11,7 +11,7 @@ import {
   fetchAssets,
   fetchEffectConfigurations,
   fetchEffectDefinitions,
-  fetchGifts,
+  fetchAllGifts,
   fetchOverlays,
   fetchSystemFonts,
   setEffectConfigurationEnabled,
@@ -95,7 +95,7 @@ export function EffectsPage(): React.ReactElement {
       fetchEffectConfigurations(),
       fetchOverlays(),
       fetchAssets(),
-      fetchGifts({ sort: "lastSeenAt", order: "desc", limit: 300 }),
+      fetchAllGifts({ sort: "lastSeenAt", order: "desc" }),
       fetchSystemFonts()
     ]);
     setDefinitions(nextDefinitions);
@@ -360,7 +360,14 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
   }
 
   function patchGiftIds(ids: string[]): Promise<void> {
-    return patchParameter("giftIdsCsv", ids.join(","));
+    return props.onPatch({ visual: { parameters: {
+      ...configuration.visual.parameters,
+      giftIdsCsv: ids.join(","),
+      giftSelectionsJson: JSON.stringify(ids.map((giftId) => {
+        const gift = props.gifts.find((item) => item.id === giftId || item.platformGiftId === giftId);
+        return { giftId, giftName: gift?.matchName ?? gift?.name };
+      }))
+    } } });
   }
 
   function selectedMediaIds(): string[] {
@@ -428,13 +435,31 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
           </>
         ) : null}
         {condition.type === "gift-specific" ? (
+          <>
+          <label>
+            {t("Recorded gift")}
+            <select value={condition.giftCatalogId ?? props.gifts.find((gift) => gift.platformGiftId === condition.platformGiftId)?.id ?? ""}
+              onChange={(event) => {
+                const gift = props.gifts.find((item) => item.id === event.target.value);
+                if (gift) void patchCondition({ ...condition, giftCatalogId: gift.id, platformGiftId: gift.platformGiftId, giftName: gift.matchName ?? gift.name });
+              }}>
+              <option value="">{t("Choose recorded gift")}</option>
+              {props.gifts.map((gift) => <option key={gift.id} value={gift.id}>{gift.name}</option>)}
+            </select>
+          </label>
           <label>
             {t("TikTok Gift ID")}
             <input
               value={condition.platformGiftId}
-              onChange={(event) => void patchCondition({ ...condition, platformGiftId: event.target.value })}
+              onChange={(event) => void patchCondition({ ...condition, giftCatalogId: undefined, platformGiftId: event.target.value })}
             />
           </label>
+          <label>
+            {t("Effect matching name")}
+            <input value={condition.giftName ?? ""} onChange={(event) => void patchCondition({ ...condition, giftCatalogId: undefined, giftName: event.target.value })} />
+            <small>{t("ID or matching name triggers this effect.")}</small>
+          </label>
+          </>
         ) : null}
         {condition.type === "gift-value" ? (
           <label>
