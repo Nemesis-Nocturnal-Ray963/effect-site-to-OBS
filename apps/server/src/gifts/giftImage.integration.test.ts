@@ -56,15 +56,16 @@ it("uses a local cached image for catalog previews and both effect test paths, i
     await app.inject({ method: "PATCH", url: `/api/v1/presets/${preset.id}/slots/${slot.id}`, payload: {
       effectDefinitionId: "gift-pile", trigger: { mode: "any", conditions: [{
         type: "gift-specific", platform: "tiktok", platformGiftId: gift.platformGiftId, giftName: "Received name", triggerOn: "gift"
-      }] }
+      }] }, visual: { parameters: { coinImageRulesJson: '[{"minCoinValue":0,"maxCoinValue":100,"sizePx":88}]' } }
     } });
     await app.inject({ method: "POST", url: `/api/v1/presets/${preset.id}/save` });
     await app.inject({ method: "POST", url: "/api/v1/events", headers: { "x-effect-app-key": apiKey }, payload: {
       schemaVersion: "1.0", eventId: "live-cached-image", type: "gift", platform: "tiktok", source: "test",
-      timestamp: new Date().toISOString(), data: { giftId: "actual-platform-id", giftName: "Received name", coinValue: 100, repeatCount: 1 }
+      timestamp: new Date().toISOString(), data: { giftId: "actual-platform-id", giftName: "Received name", repeatCount: 1 }
     } });
     await expect.poll(() => messages.length).toBe(3);
     expect(messages[2]!.media?.imageUrl).toBe(localUrl);
+    expect(messages[2]!.parameters?.objectSizePx).toBe(88);
     expect(download).toHaveBeenCalledTimes(1);
     const saved = (await app.inject({ method: "GET", url: `/api/v1/gifts/${encodeURIComponent(gift.id)}` })).json().gift;
     expect(saved.image).toMatchObject({ primaryUrl: source, cacheStatus: "cached", mimeType: "image/png" });

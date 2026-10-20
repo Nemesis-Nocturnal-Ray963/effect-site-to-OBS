@@ -392,10 +392,14 @@ export async function createApp(options: CreateAppOptions) {
   async function executeGiftPile(configuration: Awaited<ReturnType<EffectConfigurationService["list"]>>[number], event?: NormalizedEvent) {
     const resolved = await effectConfigurationService.resolveGifts(configuration);
     const gift = await giftCatalogService.findForEvent(event);
-    const source = resolveGiftPileImageUrl(resolved.visual.parameters, event, gift?.image.primaryUrl);
+    const coinValue = gift?.coinValue ?? gift?.diamondValue;
+    const hasValue = [event?.data.coinValue, event?.data.diamondValue].some((value) => typeof value === "number" && Number.isFinite(value) && value >= 0);
+    const resolvedEvent = event && !hasValue && typeof coinValue === "number" && Number.isFinite(coinValue) && coinValue >= 0
+      ? { ...event, data: { ...event.data, coinValue } } : event;
+    const source = resolveGiftPileImageUrl(resolved.visual.parameters, resolvedEvent, gift?.image.primaryUrl);
     const localImage = source && source === gift?.image.primaryUrl
       ? await resolveCatalogImage(gift) : await giftImageCache.resolve(source);
-    return giftPileEffectService!.execute(resolved, event, undefined, localImage ?? null);
+    return giftPileEffectService!.execute(resolved, resolvedEvent, undefined, localImage ?? null);
   }
 
   async function executeTimeTrigger(trigger: TimeTrigger, event: NormalizedEvent): Promise<unknown[]> {

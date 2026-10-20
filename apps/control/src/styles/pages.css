@@ -571,7 +571,7 @@
 }
 
 .coin-image-rules .gift-pile-override-row {
-  grid-template-columns: minmax(120px, 1fr) minmax(160px, 1fr) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 10px 0;
   border-top: 1px solid #303030;
 }

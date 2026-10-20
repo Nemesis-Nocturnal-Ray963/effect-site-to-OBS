@@ -48,7 +48,7 @@ export const giftPileEffectDefinition: EffectDefinition = {
       },
       {
         key: "coinImageRulesJson",
-        label: "Coin-specific gift images",
+        label: "Coin-range sizes and images",
         type: "string",
         defaultValue: "[]"
       }
@@ -160,7 +160,7 @@ export function resolveCoinImageUrl(
         item &&
         typeof item === "object" &&
         (item as Record<string, unknown>).useCustomImage !== false &&
-        numeric((item as Record<string, unknown>).coinValue) === coinValue
+        matchesCoinRange(item as Record<string, unknown>, coinValue)
     ) as Record<string, unknown> | undefined;
     const imageUrl = match?.imageUrl;
     return typeof imageUrl === "string" && /^(https?:\/\/|\/(?!\/))/u.test(imageUrl)
@@ -173,6 +173,16 @@ export function resolveCoinImageUrl(
 
 function numeric(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : -1;
+}
+
+function matchesCoinRange(rule: Record<string, unknown>, coinValue: number): boolean {
+  if (!Number.isFinite(coinValue) || coinValue < 0) return false;
+  const hasRange = rule.minCoinValue !== undefined || rule.maxCoinValue !== undefined;
+  const min = hasRange ? rule.minCoinValue : rule.coinValue;
+  const max = hasRange ? rule.maxCoinValue : rule.coinValue;
+  return typeof min === "number" && Number.isFinite(min) && min >= 0 &&
+    typeof max === "number" && Number.isFinite(max) && max >= min &&
+    coinValue >= min && coinValue <= max;
 }
 
 function giftCoinValue(event: NormalizedEvent): number {
@@ -229,7 +239,9 @@ function resolveCoinObjectSize(
       (item) =>
         item &&
         typeof item === "object" &&
-        numeric((item as Record<string, unknown>).coinValue) === coinValue
+        matchesCoinRange(item as Record<string, unknown>, coinValue) &&
+        typeof (item as Record<string, unknown>).sizePx === "number" &&
+        Number.isFinite((item as Record<string, unknown>).sizePx)
     ) as Record<string, unknown> | undefined;
     return typeof match?.sizePx === "number" && Number.isFinite(match.sizePx)
       ? clampSize(match.sizePx, 44)

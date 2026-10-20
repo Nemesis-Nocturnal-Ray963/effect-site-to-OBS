@@ -26,6 +26,81 @@ function gift(type: NormalizedEvent["type"], count: number, id: string): Normali
 }
 
 describe("gift pile delivery", () => {
+  it.each([[0, 88], [1, 88], [100, 88], [101, 120], [200, 120], [201, 44]])(
+    "resolves an inclusive coin range for a %s-coin gift", (coinValue, size) => {
+      const event = gift("gift", 1, `range-${coinValue}`);
+      event.data.coinValue = coinValue;
+      expect(resolveGiftObjectSize({
+        objectSizePx: 44,
+        coinImageRulesJson: JSON.stringify([
+          { minCoinValue: 0, maxCoinValue: 100, sizePx: 88 },
+          { minCoinValue: 101, maxCoinValue: 200, sizePx: 120 }
+        ])
+      }, event)).toBe(size);
+    }
+  );
+
+  it("uses gift overrides before ranges, and the first matching size in overlapping ranges", () => {
+    const event = gift("gift", 1, "range-priority");
+    event.data.coinValue = 50;
+    const ranges = JSON.stringify([
+      { minCoinValue: 0, maxCoinValue: 100, sizePx: 88 },
+      { minCoinValue: 50, maxCoinValue: 150, sizePx: 120 }
+    ]);
+    expect(resolveGiftObjectSize({ coinImageRulesJson: ranges }, event)).toBe(88);
+    expect(resolveGiftObjectSize({ coinImageRulesJson: ranges, giftSizeOverridesJson: '[{"giftId":"rose","sizePx":160}]' }, event)).toBe(160);
+  });
+
+  it("ignores malformed ranges, unknown prices, and size-free image rules", () => {
+    const event = gift("gift", 1, "range-validation");
+    event.data = { giftId: "rose", coinValue: 50 };
+    const parameters = { objectSizePx: 55, coinImageRulesJson: JSON.stringify([
+      { minCoinValue: 0, sizePx: 500 },
+      { minCoinValue: 100, maxCoinValue: 0, sizePx: 500 },
+      { minCoinValue: -1, maxCoinValue: 100, sizePx: 500 },
+      { minCoinValue: "0", maxCoinValue: 100, sizePx: 500 },
+      { minCoinValue: 0, maxCoinValue: 100, sizePx: null, imageUrl: "/asset-files/image-only.png" },
+      { minCoinValue: 0, maxCoinValue: 100, sizePx: 88 }
+    ]) };
+    expect(resolveGiftObjectSize(parameters, event)).toBe(88);
+    event.data = { giftId: "rose", repeatCount: 1 };
+    expect(resolveGiftObjectSize(parameters, event)).toBe(55);
+  });
+
+  it("uses the per-gift price instead of the combo total and can derive it from the total", () => {
+    const event = gift("gift-streak-end", 10, "range-combo");
+    event.data.coinValue = 100;
+    event.data.coinValueTotal = 1000;
+    delete event.data.diamondValueTotal;
+    const parameters = { coinImageRulesJson: '[{"minCoinValue":0,"maxCoinValue":100,"sizePx":88}]' };
+    expect(resolveGiftObjectSize(parameters, event)).toBe(88);
+    delete event.data.coinValue;
+    expect(resolveGiftObjectSize(parameters, event)).toBe(88);
+  });
+
+  it("keeps legacy exact-value rules working and supports optional images within a range", () => {
+    const event = gift("gift", 1, "range-images");
+    event.data.coinValue = 100;
+    expect(resolveGiftObjectSize({ coinImageRulesJson: '[{"coinValue":100,"sizePx":77}]' }, event)).toBe(77);
+    const parameters = { coinImageRulesJson: JSON.stringify([
+      { minCoinValue: 0, maxCoinValue: 100, sizePx: 88, useCustomImage: false, imageUrl: "/asset-files/disabled.png" },
+      { minCoinValue: 100, maxCoinValue: 200, useCustomImage: true, imageUrl: "/asset-files/range.png" }
+    ]) };
+    expect(resolveCoinImageUrl(parameters, event)).toBe("/asset-files/range.png");
+    expect(resolveGiftObjectSize(parameters, event)).toBe(88);
+  });
+
+  it("sends the resolved range size to the overlay", () => {
+    const sent: EffectPlayMessage[] = [];
+    const service = new GiftPileEffectService((_id, message) => sent.push(message));
+    const event = gift("gift", 1, "range-overlay");
+    event.data.coinValue = 100;
+    service.execute({ ...configuration, visual: { ...configuration.visual,
+      parameters: { coinImageRulesJson: '[{"minCoinValue":0,"maxCoinValue":100,"sizePx":88}]' }
+    } }, event);
+    expect(sent[0]?.parameters?.objectSizePx).toBe(88);
+  });
+
   it("uses a configured image for the gift's per-item coin value", () => {
     const event = gift("gift-streak-end", 10, "coin-image");
     event.data.diamondValue = 2;

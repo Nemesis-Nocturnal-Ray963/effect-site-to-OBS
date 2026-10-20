@@ -3,7 +3,8 @@ import type { AssetCatalogItem } from "@obs-effect/shared-types";
 import { useI18n } from "../i18n/I18nProvider";
 
 interface CoinImageRule {
-  coinValue: number;
+  minCoinValue: number;
+  maxCoinValue: number;
   sizePx: number | null;
   useCustomImage: boolean;
   assetId: string;
@@ -26,29 +27,35 @@ export function GiftPileCoinRulesEditor(props: {
   return (
     <section className="gift-pile-overrides coin-image-rules">
       <div>
-        <strong>{t("Coin-specific gift images")}</strong>
+        <strong>{t("Coin-range sizes and images")}</strong>
         <p className="empty-text">
-          {t("For each coin value, choose whether to replace the received gift image.")}
+          {t("Set a size for each inclusive coin range. Gift-specific sizes take priority; overlapping ranges use the first matching size condition.")}
         </p>
       </div>
       {rules.map((rule, index) => (
-        <div className="gift-pile-override-row" key={`${rule.coinValue}-${index}`}>
+        <div className="gift-pile-override-row" key={index}>
           <label>
-            {t("Coin")}
-            <input
-              type="number"
-              min="0"
-              max="1000000"
-              value={rule.coinValue}
-              onChange={(event) =>
+            {t("Minimum coin (inclusive)")}
+            <DeferredCoinInput
+              value={rule.minCoinValue}
+              onCommit={(minCoinValue) =>
                 save(
                   rules.map((item, itemIndex) =>
                     itemIndex === index
-                      ? { ...item, coinValue: clampCoin(Number(event.target.value)) }
+                      ? { ...item, minCoinValue, maxCoinValue: Math.max(minCoinValue, item.maxCoinValue) }
                       : item
                   )
                 )
               }
+            />
+          </label>
+          <label>
+            {t("Maximum coin (inclusive)")}
+            <DeferredCoinInput
+              value={rule.maxCoinValue}
+              onCommit={(maxCoinValue) => save(rules.map((item, itemIndex) =>
+                itemIndex === index ? { ...item, maxCoinValue, minCoinValue: Math.min(item.minCoinValue, maxCoinValue) } : item
+              ))}
             />
           </label>
           <label>
@@ -121,16 +128,18 @@ export function GiftPileCoinRulesEditor(props: {
       ))}
       <button
         type="button"
-        onClick={() =>
+        onClick={() => {
+          const minCoinValue = rules.length ? clampCoin(rules[rules.length - 1]!.maxCoinValue + 1) : 0;
+          const maxCoinValue = rules.length ? clampCoin(minCoinValue + 99) : 100;
           save([
             ...rules,
-            { coinValue: 1, sizePx: null, useCustomImage: false, assetId: "", imageUrl: "" }
-          ])
-        }
+            { minCoinValue, maxCoinValue, sizePx: 88, useCustomImage: false, assetId: "", imageUrl: "" }
+          ]);
+        }}
       >
-        {t("Add coin rule")}
+        {t("Add coin range condition")}
       </button>
-      {images.length === 0 ? (
+      {images.length === 0 && rules.some((rule) => rule.useCustomImage) ? (
         <p className="empty-text">{t("Add an image to Assets first.")}</p>
       ) : null}
     </section>
@@ -145,11 +154,14 @@ export function parseCoinImageRules(value: unknown): CoinImageRule[] {
     return parsed.flatMap((item) => {
       if (!item || typeof item !== "object") return [];
       const candidate = item as Record<string, unknown>;
-      if (typeof candidate.coinValue !== "number" || !Number.isFinite(candidate.coinValue))
-        return [];
+      const hasRange = candidate.minCoinValue !== undefined || candidate.maxCoinValue !== undefined;
+      const min = hasRange ? candidate.minCoinValue : candidate.coinValue;
+      const max = hasRange ? candidate.maxCoinValue : candidate.coinValue;
+      if (typeof min !== "number" || !Number.isFinite(min) || typeof max !== "number" || !Number.isFinite(max) || min < 0 || max < min) return [];
       return [
         {
-          coinValue: clampCoin(candidate.coinValue),
+          minCoinValue: clampCoin(min),
+          maxCoinValue: clampCoin(max),
           sizePx:
             typeof candidate.sizePx === "number" && Number.isFinite(candidate.sizePx)
               ? clampSize(candidate.sizePx)
@@ -172,6 +184,24 @@ function clampCoin(value: number): number {
 
 function clampSize(value: number): number {
   return Math.round(Math.max(16, Number.isFinite(value) ? value : 44));
+}
+
+function DeferredCoinInput(props: { value: number; onCommit: (value: number) => void }): React.ReactElement {
+  const [draft, setDraft] = React.useState(String(props.value));
+  React.useEffect(() => setDraft(String(props.value)), [props.value]);
+  function commit(): void {
+    const value = Number(draft);
+    if (!draft.trim() || !Number.isFinite(value)) {
+      setDraft(String(props.value));
+      return;
+    }
+    const normalized = clampCoin(value);
+    setDraft(String(normalized));
+    if (normalized !== props.value) props.onCommit(normalized);
+  }
+  return <input type="number" min="0" max="1000000" step="1" value={draft}
+    onChange={(event) => setDraft(event.target.value)} onBlur={commit}
+    onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />;
 }
 
 function DeferredOptionalSizeInput(props: {

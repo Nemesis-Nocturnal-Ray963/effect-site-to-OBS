@@ -192,6 +192,11 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "tikfinityEndpointHelp": "Local WebSocket endpoint exposed by TikFinity Desktop. The default is ws://localhost:21213/."
   },
   ja: {
+    "Coin-range sizes and images": "コイン範囲別のサイズ・画像",
+    "Minimum coin (inclusive)": "最小コイン数（以上）",
+    "Maximum coin (inclusive)": "最大コイン数（以下）",
+    "Add coin range condition": "コイン数の条件を追加",
+    "Set a size for each inclusive coin range. Gift-specific sizes take priority; overlapping ranges use the first matching size condition.": "ギフト1個あたりのコイン数でサイズを指定します。最小・最大の値も含みます。ギフト別指定が優先され、範囲が重なる場合は上にあるサイズ条件を使います。",
     "Picker display name": "ピッカー表示名",
     "Effect matching name": "演出照合用ギフト名",
     "Defaults to display name": "未入力の場合は表示名を使用",
