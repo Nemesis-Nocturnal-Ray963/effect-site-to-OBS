@@ -7,6 +7,7 @@ import { z } from "zod";
 import type {
   ClientInteractionMessage,
   EffectPlayMessage,
+  GiftCatalogRecord,
   EventHistoryEntry,
   NormalizedEvent,
   OverlayReloadRequiredMessage,
@@ -41,7 +42,7 @@ import { EffectConfigurationService, effectMessageFromConfiguration } from "./ef
 import { FallingImageEffectService } from "./effects/builtins/fallingImage.js";
 import { GiftComboTextEffectService } from "./effects/builtins/giftComboText.js";
 import { PitchingMachineBallEffectService } from "./effects/builtins/pitchingMachineBall.js";
-import { GiftPileEffectService } from "./effects/builtins/giftPile.js";
+import { GiftPileEffectService, resolveGiftPileImageUrl } from "./effects/builtins/giftPile.js";
 import { PuyoGameEffectService } from "./effects/builtins/puyoGame.js";
 import { registerEffectRoutes } from "./api/routes/effects.js";
 import { TikTokRawEventStore } from "./tiktok/raw-capture/TikTokRawEventStore.js";
@@ -52,6 +53,7 @@ import { registerTikTokBrowserRoutes } from "./api/routes/tiktokBrowser.js";
 import { GiftCatalogJsonRepository } from "./gifts/GiftCatalogJsonRepository.js";
 import { importStandardGiftCatalog } from "./gifts/standardGiftCatalog.js";
 import { GiftCatalogService } from "./gifts/GiftCatalogService.js";
+import { GiftImageCache } from "./gifts/GiftImageCache.js";
 import { registerGiftRoutes } from "./api/routes/gifts.js";
 import { RuntimeEffectObjectStore } from "./runtime/RuntimeEffectObjectStore.js";
 import { RuntimeInteractionService } from "./runtime/RuntimeInteractionService.js";
@@ -68,6 +70,7 @@ interface CreateAppOptions {
   rootDir: string;
   bindAddress?: string;
   port?: number;
+  giftImageDownload?: (source: string) => Promise<Buffer>;
 }
 
 const playSchema = z.object({
@@ -155,6 +158,19 @@ export async function createApp(options: CreateAppOptions) {
       broadcastGiftStats();
     }
   });
+  const giftImageCache = new GiftImageCache(rootDir, { download: options.giftImageDownload, onError: (message) => app.log.warn(message) });
+  await giftImageCache.initialize();
+
+  async function resolveCatalogImage(gift: GiftCatalogRecord | null): Promise<string | undefined> {
+    const source = gift?.image.primaryUrl;
+    if (!gift || !source) return undefined;
+    if (/^\/(?!\/)/.test(source)) return source;
+    const cached = await giftImageCache.get(source);
+    await giftCatalogService.updateImageCache(gift.id, source, cached
+      ? { cacheStatus: "cached", localPath: cached.localPath, mimeType: cached.mimeType }
+      : { cacheStatus: "failed" }).catch((error) => app.log.warn({ error: String(error) }, "Could not save gift image cache status"));
+    return cached?.url;
+  }
   function broadcastGiftStats(): void {
     void giftCatalogService.stats().then((stats) => broadcastToControl({ type: "gift:catalog-stats", stats, createdAt: now() }));
   }
@@ -213,12 +229,16 @@ export async function createApp(options: CreateAppOptions) {
     const assets = await loadCatalog(rootDir);
     const byId = new Map(assets.map((asset) => [asset.id, asset]));
     const configuredImageUrl = configuration.media?.imageAssetId ? byId.get(configuration.media.imageAssetId)?.contentUrl : undefined;
-    const eventImageUrl =
-      configuration.effectDefinitionId === "simple-media" && !configuredImageUrl
-        ? imageUrlFromEvent(configuration.visual?.parameters ?? {}, event)
-        : undefined;
+    const parameters = configuration.visual?.parameters ?? {};
+    let imageUrl = configuredImageUrl ? await giftImageCache.resolve(configuredImageUrl) : undefined;
+    if (configuration.effectDefinitionId === "simple-media" && parameters.imageSourceMode !== "asset" &&
+        (!configuredImageUrl || parameters.imageSourceMode === "gift-image" || parameters.imageSourceMode === "event-image")) {
+      const catalogGift = await giftCatalogService.findForEvent(event);
+      const catalogImage = parameters.imageSourceMode === "event-image" ? undefined : await resolveCatalogImage(catalogGift);
+      imageUrl = catalogImage ?? await giftImageCache.resolve(imageUrlFromEvent(parameters, event)) ?? imageUrl;
+    }
     return {
-      imageUrl: configuredImageUrl ?? eventImageUrl,
+      imageUrl,
       videoUrl: configuration.media?.videoAssetId ? byId.get(configuration.media.videoAssetId)?.contentUrl : undefined,
       audioUrl: configuration.media?.audioAssetId ? byId.get(configuration.media.audioAssetId)?.contentUrl : undefined
     };
@@ -338,9 +358,7 @@ export async function createApp(options: CreateAppOptions) {
       return;
     }
     if (configuration.effectDefinitionId === "gift-pile" && giftPileEffectService) {
-      const giftId = String(event.data.giftId ?? event.data.platformGiftId ?? "").trim();
-      const catalogGift = giftId ? await giftCatalogService.getByPlatformGiftId(giftId) : null;
-      giftPileEffectService.execute(configuration, event, catalogGift?.image.primaryUrl);
+      await executeGiftPile(configuration, event);
       return;
     }
     if (configuration.effectDefinitionId === "falling-image" && fallingImageEffectService) {
@@ -369,6 +387,15 @@ export async function createApp(options: CreateAppOptions) {
         media: await resolveEffectMedia(configuration, event)
       })
     );
+  }
+
+  async function executeGiftPile(configuration: Awaited<ReturnType<EffectConfigurationService["list"]>>[number], event?: NormalizedEvent) {
+    const resolved = await effectConfigurationService.resolveGifts(configuration);
+    const gift = await giftCatalogService.findForEvent(event);
+    const source = resolveGiftPileImageUrl(resolved.visual.parameters, event, gift?.image.primaryUrl);
+    const localImage = source && source === gift?.image.primaryUrl
+      ? await resolveCatalogImage(gift) : await giftImageCache.resolve(source);
+    return giftPileEffectService!.execute(resolved, event, undefined, localImage ?? null);
   }
 
   async function executeTimeTrigger(trigger: TimeTrigger, event: NormalizedEvent): Promise<unknown[]> {
@@ -834,7 +861,7 @@ export async function createApp(options: CreateAppOptions) {
   });
 
   await registerTikTokRoutes(app, tiktokManager);
-  await registerGiftRoutes(app, giftCatalogService);
+  await registerGiftRoutes(app, giftCatalogService, { resolveImage: resolveCatalogImage });
   await registerEventCatalogRoutes(app, eventCatalogService);
   await registerTimeTriggerRoutes(app, timeTriggerService);
   await registerAssetRoutes(app, rootDir);
@@ -847,7 +874,7 @@ export async function createApp(options: CreateAppOptions) {
     executeFallingImage: (configuration, event) => fallingImageEffectService!.execute(configuration, event),
     executePitchingMachineBall: (configuration, event) => pitchingMachineBallEffectService!.execute(configuration, event),
     executeGiftComboText: async (configuration, event) => giftComboTextEffectService!.execute(await effectConfigurationService.resolveGifts(configuration), event),
-    executeGiftPile: async (configuration, event) => giftPileEffectService!.execute(await effectConfigurationService.resolveGifts(configuration), event),
+    executeGiftPile,
     executePuyoGame: (configuration, event) => puyoGameEffectService!.execute(configuration, event),
     executeBallReveal,
     resolveMedia: resolveEffectMedia
@@ -949,6 +976,16 @@ export async function createApp(options: CreateAppOptions) {
       controlClients.delete(socket);
       broadcastStatus();
     });
+  });
+
+  await app.register(fastifyStatic, {
+    root: giftImageCache.directory,
+    prefix: "/gift-images/",
+    decorateReply: false,
+    setHeaders: (response) => {
+      response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      response.setHeader("X-Content-Type-Options", "nosniff");
+    }
   });
 
   await app.register(fastifyStatic, {

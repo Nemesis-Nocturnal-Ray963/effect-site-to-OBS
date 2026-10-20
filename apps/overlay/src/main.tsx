@@ -241,7 +241,7 @@ function createDefaultGameRule(): GamePresetRuleDraft {
 function GameGiftImage({ gift }: { gift: GiftCatalogOption }): React.ReactElement {
   return (
     <span className="game-gift-image">
-      {gift.image?.primaryUrl ? <img src={gift.image.primaryUrl} alt="" loading="lazy" /> : <span>No image</span>}
+      {gift.image?.primaryUrl ? <img src={`/api/v1/gifts/${encodeURIComponent(gift.id)}/image`} alt="" loading="lazy" /> : <span>No image</span>}
     </span>
   );
 }

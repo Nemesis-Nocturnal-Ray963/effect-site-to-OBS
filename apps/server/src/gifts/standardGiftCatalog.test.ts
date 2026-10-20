@@ -219,6 +219,24 @@ describe("distributed standard gift catalog", () => {
     expect(await reloaded.getById(gift.id)).toMatchObject({ name: "Private label", coinValue: 99, image: { primaryUrl: "/asset-files/local.png" } });
   });
 
+  it("tracks cached images without treating them as manual edits, and ignores stale download completions", async () => {
+    const { repository } = await setup();
+    const old = catalog();
+    await repository.mergeStandardCatalog(old);
+    await repository.updateImageCache("tiktok:123", old.gifts[0]!.imageUrl!, {
+      cacheStatus: "cached", localPath: "data/gifts/images/old.png", mimeType: "image/png"
+    });
+    expect(await repository.getById("tiktok:123")).toMatchObject({ isManuallyEdited: false, image: { cacheStatus: "cached" } });
+    const next = catalog("b".repeat(64));
+    next.gifts[0]!.name = "Corrected label";
+    next.gifts[0]!.imageUrl = "https://p16-webcast.tiktokcdn.com/img/corrected.png";
+    await repository.mergeStandardCatalog(next);
+    expect(await repository.updateImageCache("tiktok:123", old.gifts[0]!.imageUrl!, { cacheStatus: "cached", localPath: "data/gifts/images/old.png" })).toBeNull();
+    const gift = (await repository.getById("tiktok:123"))!;
+    expect(gift).toMatchObject({ name: "Corrected label", image: { primaryUrl: next.gifts[0]!.imageUrl, cacheStatus: "pending" } });
+    expect(gift.image.localPath).toBeUndefined();
+  });
+
   it("imports before serving the catalog API after an update", async () => {
     const { root } = await setup();
     await mkdir(path.join(root, "apps/server/catalogs"), { recursive: true });

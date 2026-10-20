@@ -92,7 +92,7 @@ export async function registerEffectRoutes(
     executeGiftPile?: (configuration: EffectConfiguration, event?: NormalizedEvent) => { spawnedObjectCount: number; skipped: boolean } | Promise<{ spawnedObjectCount: number; skipped: boolean }>;
     executePuyoGame?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executeBallReveal?: (configuration: EffectConfiguration, event?: NormalizedEvent, triggerType?: string) => Promise<{ skipped: boolean; reason?: string; instanceId?: string; mediaCount?: number }>;
-    resolveMedia?: (configuration: EffectConfiguration) => Promise<ResolvedEffectMedia>;
+    resolveMedia?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<ResolvedEffectMedia>;
   }
 ): Promise<void> {
   app.get("/api/v1/effect-definitions", async () => ({ definitions: effectDefinitions }));
@@ -240,7 +240,7 @@ export async function registerEffectRoutes(
     const message = effectMessageFromConfiguration(configuration, {
       instanceId: `effect-config-test-${configuration.id}-${Date.now()}`,
       createdAt: now(),
-      media: options?.resolveMedia ? await options.resolveMedia(configuration) : undefined,
+      media: options?.resolveMedia ? await options.resolveMedia(configuration, giftTestEvent) : undefined,
       event: giftTestEvent,
       triggerType: giftTestEvent ? "gift" : "manual"
     });

@@ -1,5 +1,6 @@
 import React from "react";
 import type { GiftCatalogRecord } from "@obs-effect/shared-types";
+import { giftImageSrc } from "../services/giftImages";
 import { useI18n } from "../i18n/I18nProvider";
 
 interface GiftSizeOverride {
@@ -71,7 +72,7 @@ export function GiftPileOverridesEditor(props: {
         return (
           <div className="gift-pile-override-row" key={`${override.giftId}-${index}`}>
             <div className="gift-pile-override-gift">
-              {gift?.image.primaryUrl ? <img src={gift.image.primaryUrl} alt="" /> : null}
+              {gift?.image.primaryUrl ? <img src={giftImageSrc(gift)} alt="" loading="lazy" /> : null}
               <span>
                 <strong>{gift?.name ?? override.giftId}</strong>
                 <small>
@@ -190,7 +191,7 @@ export function GiftPileOverridesEditor(props: {
                   >
                     <span className="gift-tile-image">
                       {gift.image.primaryUrl ? (
-                        <img src={gift.image.primaryUrl} alt="" loading="lazy" />
+                        <img src={giftImageSrc(gift)} alt="" loading="lazy" />
                       ) : (
                         <span>{t("No image")}</span>
                       )}

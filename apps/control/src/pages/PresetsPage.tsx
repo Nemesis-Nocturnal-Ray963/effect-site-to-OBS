@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import { GiftPileControls } from "../components/GiftPileControls";
+import { giftImageSrc } from "../services/giftImages";
 import { GiftPileOverridesEditor } from "../components/GiftPileOverridesEditor";
 import { GiftPileCoinRulesEditor } from "../components/GiftPileCoinRulesEditor";
 import type {
@@ -1096,7 +1097,7 @@ function FontFamilyField(props: { value: string; fonts: SystemFontInfo[]; onChan
 function GiftImage({ gift }: { gift: GiftCatalogRecord }): React.ReactElement {
   return (
     <span className="preset-gift-image">
-      {gift.image.primaryUrl ? <img src={gift.image.primaryUrl} alt="" loading="lazy" /> : <span>No image</span>}
+      {gift.image.primaryUrl ? <img src={giftImageSrc(gift)} alt="" loading="lazy" /> : <span>No image</span>}
     </span>
   );
 }

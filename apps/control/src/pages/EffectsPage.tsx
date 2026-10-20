@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import { GiftPileControls } from "../components/GiftPileControls";
+import { giftImageSrc } from "../services/giftImages";
 import { GiftPileOverridesEditor } from "../components/GiftPileOverridesEditor";
 import { EffectGiftTestControls } from "../components/EffectGiftTestControls";
 import { GiftPileCoinRulesEditor } from "../components/GiftPileCoinRulesEditor";
@@ -853,7 +854,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
                             void patchGiftIds([...next]);
                           }}
                         />
-                        {gift.image.primaryUrl ? <img src={gift.image.primaryUrl} alt="" /> : <span className="gift-combo-gift-fallback" />}
+                        {gift.image.primaryUrl ? <img src={giftImageSrc(gift)} alt="" loading="lazy" /> : <span className="gift-combo-gift-fallback" />}
                         <span>
                           <strong>{gift.name}</strong>
                           <small>

@@ -5,6 +5,7 @@ import type {
   GiftCatalogStats,
   GiftImageCacheStatus
 } from "@obs-effect/shared-types";
+import { giftImageSrc } from "../services/giftImages";
 import { useI18n } from "../i18n/I18nProvider";
 import {
   createGift,
@@ -318,7 +319,7 @@ export function GiftCatalogPage(): React.ReactElement {
                 >
                   <span className="gift-tile-image">
                     {gift.image.primaryUrl ? (
-                      <img src={gift.image.primaryUrl} alt="" loading="lazy" />
+                      <img src={giftImageSrc(gift)} alt="" loading="lazy" />
                     ) : (
                       <span>{t("No image")}</span>
                     )}
@@ -353,7 +354,7 @@ export function GiftCatalogPage(): React.ReactElement {
                         {gift.image.primaryUrl ? (
                           <img
                             className="gift-thumb"
-                            src={gift.image.primaryUrl}
+                            src={giftImageSrc(gift)}
                             alt=""
                             loading="lazy"
                           />
@@ -456,7 +457,7 @@ export function GiftCatalogPage(): React.ReactElement {
               </select>
             </label>
             {form.primaryImageUrl ? (
-              <img className="gift-catalog-image-preview" src={form.primaryImageUrl} alt="" />
+              <img className="gift-catalog-image-preview" src={form.primaryImageUrl === selected.image.primaryUrl ? giftImageSrc(selected) : form.primaryImageUrl} alt="" />
             ) : null}
             <label className="checkbox-row">
               <input

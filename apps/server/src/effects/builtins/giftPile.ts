@@ -68,21 +68,13 @@ export class GiftPileEffectService {
   execute(
     configuration: EffectConfiguration,
     event?: NormalizedEvent,
-    catalogImageUrl?: string
+    catalogImageUrl?: string,
+    resolvedImageUrl?: string | null
   ): { spawnedObjectCount: number; skipped: boolean } {
     const quantity = event ? this.quantity(configuration, event) : 1;
     if (quantity <= 0) return { spawnedObjectCount: 0, skipped: true };
-    const urls = [
-      event?.data.primaryGiftImageUrl,
-      ...(Array.isArray(event?.data.giftImageUrls) ? event.data.giftImageUrls : [])
-    ];
-    const eventImageUrl = urls.find(
-      (url): url is string => typeof url === "string" && /^(https?:\/\/|\/(?!\/))/u.test(url)
-    );
-    const imageUrl =
-      resolveCoinImageUrl(configuration.visual.parameters, event) ??
-      validImageUrl(catalogImageUrl) ??
-      eventImageUrl;
+    const imageUrl = resolvedImageUrl !== undefined ? resolvedImageUrl ?? undefined
+      : resolveGiftPileImageUrl(configuration.visual.parameters, event, catalogImageUrl);
     const objectSizePx = resolveGiftObjectSize(configuration.visual.parameters, event);
     this.broadcast(configuration.targetOverlayId, {
       type: "effect:play",
@@ -146,6 +138,12 @@ export class GiftPileEffectService {
     if (this.counts.size > 10000) this.counts.delete(this.counts.keys().next().value!);
     return delta;
   }
+}
+
+export function resolveGiftPileImageUrl(parameters: Record<string, unknown>, event?: NormalizedEvent, catalogImageUrl?: string): string | undefined {
+  const urls = [event?.data.primaryGiftImageUrl, ...(Array.isArray(event?.data.giftImageUrls) ? event.data.giftImageUrls : [])];
+  const eventImageUrl = urls.find((url): url is string => typeof url === "string" && /^(https?:\/\/|\/(?!\/))/u.test(url));
+  return resolveCoinImageUrl(parameters, event) ?? validImageUrl(catalogImageUrl) ?? eventImageUrl;
 }
 
 export function resolveCoinImageUrl(

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { GiftCatalogService } from "../../gifts/GiftCatalogService.js";
 import type { GiftCatalogQuery } from "../../gifts/giftTypes.js";
+import type { GiftCatalogRecord } from "@obs-effect/shared-types";
 
 const queryBoolean = z.preprocess((value) => {
   if (value === "true") return true;
@@ -38,7 +39,9 @@ const manualGiftSchema = z.object({
   primaryImageUrl: z.string().trim().max(4000).nullable().optional()
 });
 
-export async function registerGiftRoutes(app: FastifyInstance, service: GiftCatalogService): Promise<void> {
+export async function registerGiftRoutes(app: FastifyInstance, service: GiftCatalogService, options?: {
+  resolveImage: (gift: GiftCatalogRecord) => Promise<string | undefined>;
+}): Promise<void> {
   app.get("/api/v1/gifts", async (request, reply) => {
     const parsed = querySchema.safeParse(request.query ?? {});
     if (!parsed.success) {
@@ -80,11 +83,20 @@ export async function registerGiftRoutes(app: FastifyInstance, service: GiftCata
     }
   });
 
+  app.get("/api/v1/gifts/:id/image", async (request, reply) => {
+    const gift = await service.get((request.params as { id: string }).id);
+    if (!gift?.image.primaryUrl) return reply.code(404).send({ error: "Gift image not found" });
+    const imageUrl = await options?.resolveImage(gift);
+    if (!imageUrl) return reply.code(503).send({ error: "Gift image could not be downloaded" });
+    return reply.header("Cache-Control", "no-cache").redirect(imageUrl);
+  });
+
   app.post("/api/v1/gifts/:id/refresh-image", async (request, reply) => {
     const { id } = request.params as { id: string };
     const gift = await service.get(id);
     if (!gift) return reply.code(404).send({ error: "Gift not found" });
-    return { accepted: true, gift };
+    const imageUrl = await options?.resolveImage(gift);
+    return { accepted: Boolean(imageUrl), gift, imageUrl };
   });
 
   app.delete("/api/v1/gifts/:id", async (request) => {

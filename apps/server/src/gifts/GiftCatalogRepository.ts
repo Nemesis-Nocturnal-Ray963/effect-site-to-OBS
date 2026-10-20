@@ -8,4 +8,5 @@ export interface GiftCatalogRepository {
   update(id: string, patch: GiftCatalogPatch): Promise<GiftCatalogRecord>;
   delete(id: string): Promise<void>;
   count(): Promise<number>;
+  updateImageCache(id: string, sourceUrl: string, patch: { localPath?: string; mimeType?: string; cacheStatus: "cached" | "failed" }): Promise<GiftCatalogRecord | null>;
 }

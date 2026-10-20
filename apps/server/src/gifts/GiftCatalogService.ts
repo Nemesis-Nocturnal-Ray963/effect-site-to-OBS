@@ -3,6 +3,7 @@ import type { GiftCatalogRepository } from "./GiftCatalogRepository.js";
 import { GiftExtractor } from "./GiftExtractor.js";
 import type { GiftCatalogPatch, GiftCatalogQuery } from "./giftTypes.js";
 import { randomUUID } from "node:crypto";
+import { giftMatches, samePlatformGiftId } from "./giftAliases.js";
 
 interface GiftCatalogServiceOptions {
   repository: GiftCatalogRepository;
@@ -60,6 +61,28 @@ export class GiftCatalogService {
 
   getByPlatformGiftId(platformGiftId: string): Promise<GiftCatalogRecord | null> {
     return this.repository.getByPlatformGiftId("tiktok", platformGiftId);
+  }
+
+  async findForEvent(event?: NormalizedEvent): Promise<GiftCatalogRecord | null> {
+    if (!event || event.platform !== "tiktok" || !event.type.startsWith("gift")) return null;
+    let exact: GiftCatalogRecord | null = null;
+    for (const id of [event.data.giftId, event.data.platformGiftId]) {
+      if (id === undefined || id === null || !String(id).trim()) continue;
+      const record = await this.getByPlatformGiftId(String(id));
+      if (record?.image.primaryUrl) return record;
+      exact ??= record;
+    }
+    const matches = (await this.listAll()).filter((gift) => giftMatches(event, gift.platformGiftId, gift.matchName));
+    const value = event.data.coinValue ?? event.data.diamondValue;
+    const priced = typeof value === "number" ? matches.filter((gift) => (gift.coinValue ?? gift.diamondValue) === value) : matches;
+    const withImage = priced.filter((gift) => gift.image.primaryUrl);
+    if (withImage.length === 1) return withImage[0]!;
+    if (withImage.length > 1 && withImage.every((gift) => samePlatformGiftId(event.platform, gift.platformGiftId, withImage[0]!.platformGiftId))) return withImage[0]!;
+    return exact ?? (priced.length === 1 ? priced[0]! : matches.length === 1 ? matches[0]! : null);
+  }
+
+  async updateImageCache(id: string, sourceUrl: string, patch: { localPath?: string; mimeType?: string; cacheStatus: "cached" | "failed" }): Promise<void> {
+    await this.repository.updateImageCache(id, sourceUrl, patch);
   }
 
   async createManual(input: { platformGiftId?: string; name: string; matchName?: string; coinValue?: number | null; primaryImageUrl?: string | null }): Promise<GiftCatalogRecord> {

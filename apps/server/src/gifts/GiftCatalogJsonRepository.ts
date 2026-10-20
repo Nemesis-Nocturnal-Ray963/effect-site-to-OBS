@@ -113,6 +113,7 @@ export class GiftCatalogJsonRepository implements GiftCatalogRepository {
   private standardCatalogVersion?: string;
   private standardMergeFormat?: number;
   private standardGiftState: Record<string, StandardGiftState> = {};
+  private saveQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly filePath: string) {}
 
@@ -273,6 +274,17 @@ export class GiftCatalogJsonRepository implements GiftCatalogRepository {
     return this.records?.length ?? 0;
   }
 
+  async updateImageCache(id: string, sourceUrl: string, patch: { localPath?: string; mimeType?: string; cacheStatus: "cached" | "failed" }): Promise<GiftCatalogRecord | null> {
+    await this.load();
+    const record = this.records?.find((item) => item.id === id);
+    if (!record || record.image.primaryUrl !== sourceUrl) return null;
+    if (record.image.cacheStatus === patch.cacheStatus && record.image.localPath === patch.localPath) return record;
+    record.image = { ...record.image, ...patch, cachedAt: patch.cacheStatus === "cached" ? new Date().toISOString() : record.image.cachedAt };
+    // Cache bookkeeping must not affect standard-field customization protection.
+    await this.save();
+    return record;
+  }
+
   async getStandardCatalogVersion(): Promise<string | undefined> {
     await this.load();
     return this.standardCatalogVersion;
@@ -406,11 +418,17 @@ export class GiftCatalogJsonRepository implements GiftCatalogRepository {
     }
   }
 
-  private async save(): Promise<void> {
-    await mkdir(path.dirname(this.filePath), { recursive: true });
-    const temporaryPath = `${this.filePath}.${randomUUID()}.tmp`;
-    await writeFile(temporaryPath, `${JSON.stringify({ standardCatalogVersion: this.standardCatalogVersion, standardMergeFormat: this.standardMergeFormat,
-      standardGiftState: this.standardGiftState, records: this.records ?? [] }, null, 2)}\n`, "utf8");
-    await rename(temporaryPath, this.filePath);
+  private save(): Promise<void> {
+    // Image previews finish concurrently. An older write must not overwrite a
+    // later gift registration or a user's edit while cache statuses are saved.
+    const task = this.saveQueue.catch(() => {}).then(async () => {
+      await mkdir(path.dirname(this.filePath), { recursive: true });
+      const temporaryPath = `${this.filePath}.${randomUUID()}.tmp`;
+      await writeFile(temporaryPath, `${JSON.stringify({ standardCatalogVersion: this.standardCatalogVersion, standardMergeFormat: this.standardMergeFormat,
+        standardGiftState: this.standardGiftState, records: this.records ?? [] }, null, 2)}\n`, "utf8");
+      await rename(temporaryPath, this.filePath);
+    });
+    this.saveQueue = task;
+    return task;
   }
 }
