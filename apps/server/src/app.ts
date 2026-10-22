@@ -1,5 +1,6 @@
 ﻿import path from "node:path";
 import { createReadStream } from "node:fs";
+import os from "node:os";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
@@ -36,6 +37,8 @@ import { OverlayRegistry } from "./overlays/overlayRegistry.js";
 import { OverlayConnectionManager } from "./overlays/overlayConnectionManager.js";
 import { defaultOverlayId, parseOverlayId } from "./overlays/overlayTypes.js";
 import { registerOverlayRoutes } from "./api/routes/overlays.js";
+import { registerSoundboardRoutes } from "./api/routes/soundboard.js";
+import { SoundboardRepository } from "./soundboard/SoundboardRepository.js";
 import { OverlayConfigurationJsonRepository } from "./overlays/OverlayConfigurationJsonRepository.js";
 import { EffectConfigurationJsonRepository } from "./effects/EffectConfigurationJsonRepository.js";
 import { EffectConfigurationService, effectMessageFromConfiguration } from "./effects/EffectConfigurationService.js";
@@ -70,6 +73,7 @@ interface CreateAppOptions {
   rootDir: string;
   bindAddress?: string;
   port?: number;
+  soundboardRemotePort?: number;
   giftImageDownload?: (source: string) => Promise<Buffer>;
 }
 
@@ -110,6 +114,7 @@ export async function createApp(options: CreateAppOptions) {
   const rootDir = options.rootDir;
   const bindAddress = options.bindAddress ?? "127.0.0.1";
   const port = options.port ?? 3190;
+  const soundboardRemotePort = options.soundboardRemotePort ?? port + 1;
   const startedAt = Date.now();
   let apiConfig = loadApiConfig(rootDir);
 
@@ -130,6 +135,7 @@ export async function createApp(options: CreateAppOptions) {
   overlayRegistry.applyConfigurations(await overlayConfigurationRepository.list());
   const effectConfigurationService = new EffectConfigurationService(EffectConfigurationJsonRepository.fromRoot(rootDir), () => now(), () => giftCatalogService.listAll());
   const presetService = new PresetService(PresetJsonRepository.fromRoot(rootDir), () => now());
+  const soundboardRepository = new SoundboardRepository(rootDir, () => now());
   const runtimeStore = new RuntimeEffectObjectStore();
   const eventBus = new EventBus();
   const eventHistoryStore = new EventHistoryStore({ maxEntries: 1000 });
@@ -897,6 +903,14 @@ export async function createApp(options: CreateAppOptions) {
     onMarkerAdded: (marker) => broadcastToControl({ type: "tiktok:browser-marker-added", marker, createdAt: now() })
   });
   await registerOverlayRoutes(app, overlayConnectionManager, overlayRegistry, overlayConfigurationRepository, now);
+  await registerSoundboardRoutes(app, {
+    rootDir,
+    repository: soundboardRepository,
+    overlays: overlayConnectionManager,
+    broadcastToControl,
+    now,
+    remoteBaseUrl: () => `http://${firstLanAddress()}:${soundboardRemotePort}`
+  });
 
   app.get("/ws/overlay", { websocket: true }, (socket) => {
     overlayConnectionManager.addClient(1, socket);
@@ -1091,6 +1105,15 @@ function firstStringConfig(value: unknown): string | undefined {
 
 function numericConfig(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function firstLanAddress(): string {
+  for (const addresses of Object.values(os.networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family === "IPv4" && !address.internal) return address.address;
+    }
+  }
+  return "127.0.0.1";
 }
 
 async function delay(ms: number): Promise<void> {

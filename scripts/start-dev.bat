@@ -32,6 +32,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $main=Invoke-RestMethod -Uri 'http://127.0.0.1:3190/health' -TimeoutSec 1; $remote=Invoke-RestMethod -Uri 'http://127.0.0.1:3191/health' -TimeoutSec 1; if ($main.status -eq 'ok' -and $remote.status -eq 'ok') { exit 0 } } catch {}; exit 1"
+if not errorlevel 1 goto server_running
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:3190/health' -TimeoutSec 1; if ($r.status -eq 'ok') { exit 0 } } catch {}; exit 1"
+if not errorlevel 1 goto server_restart_required
+
 start "OBS Effect App Server" cmd /k "cd /d %cd% && corepack pnpm --filter @obs-effect/server start"
 
 echo Waiting for http://127.0.0.1:3190/health ...
@@ -46,3 +52,17 @@ start "" "http://127.0.0.1:3190/control"
 echo Control UI: http://127.0.0.1:3190/control
 echo OBS Overlay: http://127.0.0.1:3190/overlay
 pause
+exit /b 0
+
+:server_running
+echo OBS Effect App Server is already running on port 3190.
+start "" "http://127.0.0.1:3190/control"
+echo Control UI: http://127.0.0.1:3190/control
+pause
+exit /b 0
+
+:server_restart_required
+echo An older OBS Effect App Server is already using port 3190.
+echo Close the existing server window, then run start-dev.bat again.
+pause
+exit /b 1

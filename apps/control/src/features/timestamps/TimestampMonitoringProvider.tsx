@@ -37,7 +37,7 @@ function readVolumeThreshold(): number {
 }
 
 function createSessionId(): string {
-  return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
 function readTimestampHistory(): TimestampRecord[] {
@@ -84,7 +84,7 @@ export function TimestampMonitoringProvider({ children }: { children: React.Reac
       sessionIdRef.current = createSessionId();
     }
     const timestamp: TimestampRecord = {
-      id: `${recordedAt}-${crypto.randomUUID?.() ?? Math.random()}`,
+      id: `${recordedAt}-${globalThis.crypto?.randomUUID?.() ?? Math.random()}`,
       sessionId: sessionIdRef.current,
       recordedAt,
       kind

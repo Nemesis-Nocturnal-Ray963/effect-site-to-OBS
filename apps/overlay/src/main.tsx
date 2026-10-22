@@ -837,7 +837,9 @@ function OverlayApp(): React.ReactElement {
 
     function handleMessage(event: MessageEvent): void {
       const message = JSON.parse(event.data as string) as ServerMessage;
-      if (message.type === "effect:play" && message.effectId === "gift-pile") {
+      if (message.type === "effect:clear") {
+        setSimpleMedia([]);
+      } else if (message.type === "effect:play" && message.effectId === "gift-pile") {
         giftPileRef.current?.receive(message);
       } else if (message.type === "effect:play" && message.effectId === "flash") {
         const play = message as EffectPlayMessage;
@@ -853,7 +855,14 @@ function OverlayApp(): React.ReactElement {
         const play = message as EffectPlayMessage;
         const durationMs = play.playback?.durationMs ?? 3000;
         const item: SimpleMediaPlayback = { id: play.instanceId, message: play, durationMs };
-        setSimpleMedia((current) => [...current, item]);
+        setSimpleMedia((current) => {
+          const shouldRestart = play.parameters?.soundboardRetriggerMode === "restart";
+          const padId = play.parameters?.soundboardPadId;
+          const retained = shouldRestart && typeof padId === "string"
+            ? current.filter((active) => active.message.parameters?.soundboardPadId !== padId)
+            : current;
+          return [...retained, item];
+        });
         window.setTimeout(() => {
           setSimpleMedia((current) => current.filter((active) => active.id !== item.id));
         }, durationMs);

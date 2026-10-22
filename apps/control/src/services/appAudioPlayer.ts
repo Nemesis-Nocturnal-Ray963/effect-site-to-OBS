@@ -1,4 +1,4 @@
-import type { AppAudioComboMessage } from "@obs-effect/shared-types";
+import type { AppAudioComboMessage, SoundboardAudioMessage } from "@obs-effect/shared-types";
 
 interface ComboAudioState {
   message: AppAudioComboMessage;
@@ -11,6 +11,155 @@ interface ComboAudioState {
 
 const comboStates = new Map<string, ComboAudioState>();
 const activeAudio = new Set<HTMLAudioElement>();
+const soundboardSourcesByPad = new Map<string, Set<AudioBufferSourceNode>>();
+const soundboardBufferCache = new Map<string, Promise<AudioBuffer>>();
+const audioTabId = `audio-tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const audioOwnerKey = "obs-effect-audio-owner";
+let audioOutputInitialized = false;
+let soundboardAudioContext: AudioContext | null = null;
+
+export type AppAudioOutputStatus = "ready" | "needs-interaction" | "unsupported" | "error";
+
+let appAudioOutputStatus: AppAudioOutputStatus = "needs-interaction";
+const appAudioOutputListeners = new Set<() => void>();
+
+export function getAppAudioOutputStatus(): AppAudioOutputStatus {
+  return appAudioOutputStatus;
+}
+
+export function subscribeAppAudioOutputStatus(listener: () => void): () => void {
+  appAudioOutputListeners.add(listener);
+  return () => appAudioOutputListeners.delete(listener);
+}
+
+function setAppAudioOutputStatus(status: AppAudioOutputStatus): void {
+  if (appAudioOutputStatus === status) return;
+  appAudioOutputStatus = status;
+  for (const listener of appAudioOutputListeners) listener();
+}
+
+export function initializeAppAudioOutput(): () => void {
+  if (audioOutputInitialized) return () => undefined;
+  audioOutputInitialized = true;
+  claimAudioOutput();
+  const heartbeat = window.setInterval(claimAudioOutput, 2000);
+  const unlock = () => {
+    claimAudioOutput(true);
+    const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) {
+      setAppAudioOutputStatus("unsupported");
+      return;
+    }
+    soundboardAudioContext ??= new AudioContextConstructor();
+    void soundboardAudioContext.resume()
+      .then(() => setAppAudioOutputStatus(soundboardAudioContext?.state === "running" ? "ready" : "needs-interaction"))
+      .catch(() => setAppAudioOutputStatus("needs-interaction"));
+  };
+  unlock();
+  window.addEventListener("pointerdown", unlock, { once: true, capture: true });
+  window.addEventListener("keydown", unlock, { once: true, capture: true });
+  window.addEventListener("focus", unlock);
+  return () => {
+    window.clearInterval(heartbeat);
+    window.removeEventListener("focus", unlock);
+    const owner = readAudioOwner();
+    if (owner?.id === audioTabId) localStorage.removeItem(audioOwnerKey);
+    audioOutputInitialized = false;
+  };
+}
+
+export function handleSoundboardAudioMessage(message: SoundboardAudioMessage): void {
+  if (!isAudioOutputOwner()) return;
+  if (message.action === "stop-all") {
+    stopAllAppAudio();
+    return;
+  }
+  if (!message.soundUrl || !message.padId) return;
+  if (message.retriggerMode === "restart") stopPadAudio(message.padId);
+  void playSoundboardAudio(message);
+}
+
+function stopPadAudio(padId: string): void {
+  for (const source of soundboardSourcesByPad.get(padId) ?? []) {
+    try { source.stop(); } catch { /* The source may already have ended. */ }
+  }
+  soundboardSourcesByPad.delete(padId);
+}
+
+function stopAllAppAudio(): void {
+  for (const audio of activeAudio) {
+    audio.pause();
+    audio.currentTime = 0;
+  }
+  activeAudio.clear();
+  for (const padId of soundboardSourcesByPad.keys()) stopPadAudio(padId);
+}
+
+async function playSoundboardAudio(message: SoundboardAudioMessage): Promise<void> {
+  if (!message.soundUrl || !message.padId) return;
+  const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextConstructor) {
+    setAppAudioOutputStatus("unsupported");
+    return;
+  }
+  soundboardAudioContext ??= new AudioContextConstructor();
+  await soundboardAudioContext.resume().catch(() => undefined);
+  if (soundboardAudioContext.state !== "running") {
+    setAppAudioOutputStatus("needs-interaction");
+    return;
+  }
+  setAppAudioOutputStatus("ready");
+  const context = soundboardAudioContext;
+  const cached = soundboardBufferCache.get(message.soundUrl) ?? fetch(message.soundUrl)
+    .then((response) => {
+      if (!response.ok) throw new Error("Audio asset could not be loaded");
+      return response.arrayBuffer();
+    })
+    .then((buffer) => context.decodeAudioData(buffer));
+  soundboardBufferCache.set(message.soundUrl, cached);
+  try {
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = await cached;
+    gain.gain.value = Math.max(0, Math.min(1, message.volume ?? 0.8));
+    source.connect(gain).connect(context.destination);
+    const sources = soundboardSourcesByPad.get(message.padId) ?? new Set<AudioBufferSourceNode>();
+    sources.add(source);
+    soundboardSourcesByPad.set(message.padId, sources);
+    source.addEventListener("ended", () => {
+      sources.delete(source);
+      if (sources.size === 0) soundboardSourcesByPad.delete(message.padId!);
+    }, { once: true });
+    source.start();
+    setAppAudioOutputStatus("ready");
+  } catch {
+    soundboardBufferCache.delete(message.soundUrl);
+    setAppAudioOutputStatus("error");
+  }
+}
+
+function claimAudioOutput(force = false): void {
+  const owner = readAudioOwner();
+  if (force || !owner || Date.now() - owner.updatedAt > 5000 || owner.id === audioTabId) {
+    localStorage.setItem(audioOwnerKey, JSON.stringify({ id: audioTabId, updatedAt: Date.now() }));
+  }
+}
+
+function isAudioOutputOwner(): boolean {
+  claimAudioOutput();
+  return readAudioOwner()?.id === audioTabId;
+}
+
+function readAudioOwner(): { id: string; updatedAt: number } | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(audioOwnerKey) ?? "null") as { id?: unknown; updatedAt?: unknown } | null;
+    return parsed && typeof parsed.id === "string" && typeof parsed.updatedAt === "number"
+      ? { id: parsed.id, updatedAt: parsed.updatedAt }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export function handleAppAudioComboMessage(message: AppAudioComboMessage): void {
   if (message.action === "stop") {
@@ -60,7 +209,7 @@ function tickComboAudio(queueId: string): void {
 
 function stopComboAudio(queueId: string): void {
   const state = comboStates.get(queueId);
-  if (state?.frameId !== null) window.cancelAnimationFrame(state.frameId);
+  if (state?.frameId != null) window.cancelAnimationFrame(state.frameId);
   comboStates.delete(queueId);
 }
 

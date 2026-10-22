@@ -2094,3 +2094,227 @@ tbody tr:hover {
     justify-content: flex-start;
   }
 }
+
+.soundboard-heading,
+.soundboard-section-header,
+.soundboard-url-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.soundboard-heading-actions {
+  margin-top: 0;
+}
+
+.soundboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 16px;
+  align-items: start;
+}
+
+.soundboard-board-editor,
+.soundboard-pad-editor,
+.soundboard-remote-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.soundboard-board-editor .soundboard-section-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+}
+
+.soundboard-section-header label,
+.soundboard-pad-editor label {
+  display: grid;
+  gap: 6px;
+  color: #c9cbc2;
+  font-size: 13px;
+}
+
+.soundboard-section-header h3,
+.soundboard-remote-panel h3,
+.soundboard-phone-screen h4 {
+  margin: 0;
+}
+
+.soundboard-pad-editor .checkbox-row {
+  display: flex;
+  align-items: center;
+}
+
+.soundboard-pad-editor input[type="range"] {
+  width: 100%;
+}
+
+.soundboard-pad-grid {
+  display: grid;
+  gap: 12px;
+}
+
+button.soundboard-pad {
+  position: relative;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  min-width: 0 !important;
+  min-height: 104px !important;
+  padding: 12px !important;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--pad-color) 72%, white 8%) !important;
+  color: #fff !important;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--pad-color) 84%, white 8%), color-mix(in srgb, var(--pad-color) 76%, black 22%)) !important;
+  box-shadow: 0 9px 22px color-mix(in srgb, var(--pad-color) 28%, transparent);
+  text-align: center;
+  touch-action: manipulation;
+}
+
+button.soundboard-pad:hover,
+button.soundboard-pad.selected {
+  border-color: #fff !important;
+  filter: brightness(1.08);
+}
+
+button.soundboard-pad.playing {
+  transform: scale(0.96);
+  filter: brightness(1.35);
+}
+
+button.soundboard-pad:disabled {
+  opacity: 0.38;
+}
+
+.soundboard-pad span {
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+
+.soundboard-pad small {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.soundboard-url-row {
+  justify-content: flex-start;
+}
+
+.soundboard-remote-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+}
+
+.soundboard-qr-card {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  color: #111827;
+  background: #fff;
+}
+
+.soundboard-qr-card img {
+  display: block;
+  width: min(220px, 42vw);
+  height: auto;
+}
+
+.soundboard-url-row input {
+  flex: 1 1 380px;
+  min-width: 0;
+}
+
+.soundboard-phone-preview {
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  border-radius: 12px;
+  background: #111;
+}
+
+.soundboard-phone-screen {
+  width: min(100%, 390px);
+  min-height: 480px;
+  padding: 22px 14px;
+  border: 8px solid #343434;
+  border-radius: 32px;
+  background: #0f1115;
+}
+
+.soundboard-phone-screen h4 {
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.soundboard-remote {
+  display: grid;
+  min-height: 100dvh;
+  gap: 18px;
+  align-content: start;
+  padding: max(18px, env(safe-area-inset-top)) 14px max(20px, env(safe-area-inset-bottom));
+  background: radial-gradient(circle at top, #243348, #0d1015 46%);
+}
+
+.soundboard-remote header {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.soundboard-remote h1,
+.soundboard-remote header small {
+  margin: 0;
+}
+
+.soundboard-remote header span {
+  max-width: 48%;
+  color: #fca5a5;
+  font-size: 12px;
+  text-align: right;
+}
+
+.soundboard-remote header span.connected {
+  color: #86efac;
+}
+
+.soundboard-remote .soundboard-pad {
+  min-height: 118px !important;
+  font-size: 17px;
+}
+
+.soundboard-stop-all {
+  position: sticky;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: 100%;
+  min-height: 58px !important;
+  border: 1px solid #ef4444 !important;
+  color: #fff !important;
+  background: #991b1b !important;
+}
+
+@media (max-width: 920px) {
+  .soundboard-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .soundboard-remote-intro {
+    grid-template-columns: 1fr;
+  }
+
+  .soundboard-remote .soundboard-pad-grid {
+    gap: 9px;
+  }
+
+  .soundboard-remote .soundboard-pad {
+    min-height: 94px !important;
+  }
+}

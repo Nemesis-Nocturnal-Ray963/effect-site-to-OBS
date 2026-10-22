@@ -32,12 +32,67 @@
   TimeTriggerStartBasis,
   TriggerAction,
   TriggerActionType,
+  SoundboardBoard,
   TikTokRawEventCapture,
   TikTokRawEventCaptureSummary,
   TikTokConnectOptions,
   TikTokConnectionStatus,
   UiLogEntry
 } from "@obs-effect/shared-types";
+
+export interface SoundboardConfigResponse {
+  board: SoundboardBoard;
+  accessToken: string;
+  remoteUrl: string;
+}
+
+export async function fetchSoundboard(): Promise<SoundboardConfigResponse> {
+  const response = await fetch("/api/v1/soundboard");
+  if (!response.ok) throw new Error("Failed to load soundboard");
+  return (await response.json()) as SoundboardConfigResponse;
+}
+
+export async function fetchRemoteSoundboard(token: string): Promise<SoundboardBoard> {
+  const response = await fetch("/api/v1/soundboard/remote", { headers: { "X-Soundboard-Token": token } });
+  if (!response.ok) throw new Error("Failed to load remote soundboard");
+  return ((await response.json()) as { board: SoundboardBoard }).board;
+}
+
+export async function saveSoundboard(board: SoundboardBoard): Promise<SoundboardBoard> {
+  const response = await fetch("/api/v1/soundboard", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(board)
+  });
+  if (!response.ok) throw new Error("Failed to save soundboard");
+  return ((await response.json()) as { board: SoundboardBoard }).board;
+}
+
+export interface SoundboardPlayResult {
+  accepted: boolean;
+  executionId: string;
+  visual: boolean;
+  audio: boolean;
+}
+
+export async function playSoundboardPad(padId: string, token: string): Promise<SoundboardPlayResult> {
+  const response = await fetch(`/api/v1/soundboard/pads/${encodeURIComponent(padId)}/play`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Soundboard-Token": token },
+    body: "{}"
+  });
+  if (!response.ok) throw new Error("Failed to play soundboard pad");
+  return (await response.json()) as SoundboardPlayResult;
+}
+
+export async function stopSoundboard(token: string): Promise<void> {
+  const response = await fetch("/api/v1/soundboard/stop-all", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Soundboard-Token": token },
+    body: "{}"
+  });
+  if (!response.ok) throw new Error("Failed to stop soundboard");
+}
 
 export interface HttpApiConfig {
   enabled: boolean;

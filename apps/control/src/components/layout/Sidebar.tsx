@@ -48,6 +48,7 @@ const sections: Array<{
       { labelKey: "nav.overlays", to: "/overlays" },
       { labelKey: "nav.assets", to: "/assets" },
       { labelKey: "nav.presets", to: "/presets" },
+      { labelKey: "nav.soundboard", to: "/soundboard" },
       { labelKey: "nav.macros", to: "/macros" }
     ]
   },

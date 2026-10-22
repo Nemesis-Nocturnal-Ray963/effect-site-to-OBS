@@ -14,7 +14,7 @@ import type {
   TikTokConnectionStatus
 } from "@obs-effect/shared-types";
 import { createControlWebSocket, type ControlSocketState, type ControlWebSocketClient } from "../services/controlWebSocket";
-import { handleAppAudioComboMessage } from "../services/appAudioPlayer";
+import { handleAppAudioComboMessage, handleSoundboardAudioMessage } from "../services/appAudioPlayer";
 import type { UiLogEntry } from "@obs-effect/shared-types";
 
 export type SocketState = ControlSocketState;
@@ -138,6 +138,8 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
           set({ logs: [] });
         } else if (message.type === "app-audio:combo") {
           handleAppAudioComboMessage(message);
+        } else if (message.type === "soundboard:audio") {
+          handleSoundboardAudioMessage(message);
         }
       }
     });

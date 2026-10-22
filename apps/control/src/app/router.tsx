@@ -21,6 +21,8 @@ import { TikTokBrowserFramesPage } from "../pages/TikTokBrowserFramesPage";
 import { TikTokRawEventsPage } from "../pages/TikTokRawEventsPage";
 import { TimeTriggersPage } from "../pages/TimeTriggersPage";
 import { TimestampsPage } from "../pages/TimestampsPage";
+import { SoundboardPage } from "../pages/SoundboardPage";
+import { SoundboardRemotePage } from "../pages/SoundboardRemotePage";
 
 export function AppRoutes(): React.ReactElement {
   return (
@@ -43,6 +45,8 @@ export function AppRoutes(): React.ReactElement {
       <Route path="assets" element={<AssetsPage />} />
       <Route path="presets" element={<PresetsPage />} />
       <Route path="macros" element={<MacrosPage />} />
+      <Route path="soundboard" element={<SoundboardPage />} />
+      <Route path="soundboard/remote" element={<SoundboardRemotePage />} />
       <Route path="time-triggers" element={<TimeTriggersPage />} />
       <Route path="rules" element={<RulesPage />} />
       <Route path="logs" element={<LogsPage />} />

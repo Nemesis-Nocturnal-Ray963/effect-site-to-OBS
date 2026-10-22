@@ -435,6 +435,40 @@ export interface AppAudioComboMessage {
   createdAt: string;
 }
 
+export type SoundboardRetriggerMode = "restart" | "overlap";
+
+export interface SoundboardPad {
+  id: string;
+  label: string;
+  color: string;
+  enabled: boolean;
+  targetOverlayId: OverlayId;
+  visualAssetId?: string;
+  audioAssetId?: string;
+  durationMs: number;
+  audioVolume: number;
+  retriggerMode: SoundboardRetriggerMode;
+}
+
+export interface SoundboardBoard {
+  id: string;
+  name: string;
+  columns: number;
+  pads: SoundboardPad[];
+  updatedAt: string;
+}
+
+export interface SoundboardAudioMessage {
+  type: "soundboard:audio";
+  action: "play" | "stop-all";
+  executionId: string;
+  padId?: string;
+  soundUrl?: string;
+  volume?: number;
+  retriggerMode?: SoundboardRetriggerMode;
+  createdAt: string;
+}
+
 export interface InteractionSessionStatusMessage {
   type: "interaction:session-status";
   overlayId: OverlayId;
@@ -1068,6 +1102,7 @@ export type ServerMessage =
   | RuntimeObjectChangedMessage
   | RuntimeOverlayClearedMessage
   | AppAudioComboMessage
+  | SoundboardAudioMessage
   | OverlayVersionMessage
   | OverlayReloadRequiredMessage
   | InteractionSessionStatusMessage
