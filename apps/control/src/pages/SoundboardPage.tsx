@@ -142,9 +142,9 @@ export function SoundboardPage(): React.ReactElement {
       }
       const result = await playSoundboardPad(padToPlay.id, token);
       const outputs = [result.visual ? "映像" : "", result.audio ? "音声" : ""].filter(Boolean).join("・");
-      if (!padToPlay.audioAssetId) {
+      if (!padToPlay.audioAssetId && !result.audio) {
         setMessage(`「${padToPlay.label}」を実行しました（音声は未設定です）。`);
-      } else if (!result.audio) {
+      } else if (padToPlay.audioAssetId && !result.audio) {
         setMessage(`「${padToPlay.label}」の音声アセットが見つかりません。再選択してください。`);
       } else {
         setMessage(`「${padToPlay.label}」を実行しました${outputs ? `（${outputs}）` : ""}。`);
@@ -235,7 +235,7 @@ export function SoundboardPage(): React.ReactElement {
                 </select>
               </label>
               <label>表示時間（秒）<input type="number" min="0.1" max="3600" step="0.1" value={selectedPad.durationMs / 1000} onChange={(event) => updatePad({ durationMs: Math.max(100, Number(event.target.value) * 1000) })} /></label>
-              <label>音量 {Math.round(selectedPad.audioVolume * 100)}%<input type="range" min="0" max="1" step="0.01" value={selectedPad.audioVolume} onChange={(event) => updatePad({ audioVolume: Number(event.target.value) })} /></label>
+              <label>音量（動画内音声・選択音声） {Math.round(selectedPad.audioVolume * 100)}%<input type="range" min="0" max="1" step="0.01" value={selectedPad.audioVolume} onChange={(event) => updatePad({ audioVolume: Number(event.target.value) })} /></label>
               <label>
                 再実行
                 <select value={selectedPad.retriggerMode} onChange={(event) => updatePad({ retriggerMode: event.target.value as SoundboardPad["retriggerMode"] })}>

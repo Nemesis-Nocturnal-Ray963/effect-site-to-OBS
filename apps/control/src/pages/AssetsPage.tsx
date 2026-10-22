@@ -91,6 +91,9 @@ export function AssetsPage(): React.ReactElement {
     try {
       for (const file of filesToUpload) {
         try {
+          if (file.name.toLowerCase().endsWith(".mov")) {
+            setMessage(`${file.name} を透明度保持WebMへ変換しています。完了までお待ちください...`);
+          }
           const asset = await uploadAsset(file);
           uploadedAssets.push(asset);
         } catch (error) {
@@ -198,7 +201,7 @@ export function AssetsPage(): React.ReactElement {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/*,audio/*,font/*,.otf,.ttc,.ttf,.woff,.woff2"
+            accept="image/*,video/*,audio/*,font/*,.mov,.otf,.ttc,.ttf,.woff,.woff2"
             multiple
             disabled={uploading}
             onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
@@ -371,6 +374,17 @@ export function AssetsPage(): React.ReactElement {
               <dd>{selected.width && selected.height ? `${selected.width} x ${selected.height}` : formatBytes(selected.sizeBytes)}</dd>
               <dt>{t("url")}</dt>
               <dd>{selected.contentUrl}</dd>
+              {selected.kind === "video" ? (
+                <><dt>動画内音声</dt><dd>{selected.hasEmbeddedAudio ? "あり（ポン出しで再生）" : "なし"}</dd></>
+              ) : null}
+              {selected.conversion?.type === "mov-to-webm-alpha" ? (
+                <>
+                  <dt>変換</dt>
+                  <dd>元MOVを保持・VP9 WebM（アルファ保持）で再生</dd>
+                  <dt>元ファイル</dt>
+                  <dd>{selected.convertedFrom?.fileName}</dd>
+                </>
+              ) : null}
             </dl>
           </aside>
         ) : null}
@@ -384,6 +398,14 @@ function AssetPreview({ asset, label, large = false }: { asset: AssetCatalogItem
     return (
       <span className={`asset-preview ${large ? "large" : ""}`}>
         <img src={asset.contentUrl} alt="" />
+      </span>
+    );
+  }
+
+  if (asset.kind === "video" && large) {
+    return (
+      <span className="asset-preview asset-preview-video large">
+        <video src={asset.contentUrl} autoPlay loop muted playsInline />
       </span>
     );
   }

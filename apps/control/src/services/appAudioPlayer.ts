@@ -12,6 +12,7 @@ interface ComboAudioState {
 const comboStates = new Map<string, ComboAudioState>();
 const activeAudio = new Set<HTMLAudioElement>();
 const soundboardSourcesByPad = new Map<string, Set<AudioBufferSourceNode>>();
+const soundboardMediaAudioByPad = new Map<string, Set<HTMLAudioElement>>();
 const soundboardBufferCache = new Map<string, Promise<AudioBuffer>>();
 const audioTabId = `audio-tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 const audioOwnerKey = "obs-effect-audio-owner";
@@ -74,9 +75,10 @@ export function handleSoundboardAudioMessage(message: SoundboardAudioMessage): v
     stopAllAppAudio();
     return;
   }
-  if (!message.soundUrl || !message.padId) return;
+  if ((!message.soundUrl && !message.mediaSoundUrl) || !message.padId) return;
   if (message.retriggerMode === "restart") stopPadAudio(message.padId);
-  void playSoundboardAudio(message);
+  if (message.soundUrl) void playSoundboardAudio(message);
+  if (message.mediaSoundUrl) void playSoundboardMediaAudio(message);
 }
 
 function stopPadAudio(padId: string): void {
@@ -84,6 +86,12 @@ function stopPadAudio(padId: string): void {
     try { source.stop(); } catch { /* The source may already have ended. */ }
   }
   soundboardSourcesByPad.delete(padId);
+  for (const audio of soundboardMediaAudioByPad.get(padId) ?? []) {
+    audio.pause();
+    audio.currentTime = 0;
+    activeAudio.delete(audio);
+  }
+  soundboardMediaAudioByPad.delete(padId);
 }
 
 function stopAllAppAudio(): void {
@@ -92,7 +100,8 @@ function stopAllAppAudio(): void {
     audio.currentTime = 0;
   }
   activeAudio.clear();
-  for (const padId of soundboardSourcesByPad.keys()) stopPadAudio(padId);
+  const padIds = new Set([...soundboardSourcesByPad.keys(), ...soundboardMediaAudioByPad.keys()]);
+  for (const padId of padIds) stopPadAudio(padId);
 }
 
 async function playSoundboardAudio(message: SoundboardAudioMessage): Promise<void> {
@@ -135,6 +144,30 @@ async function playSoundboardAudio(message: SoundboardAudioMessage): Promise<voi
   } catch {
     soundboardBufferCache.delete(message.soundUrl);
     setAppAudioOutputStatus("error");
+  }
+}
+
+async function playSoundboardMediaAudio(message: SoundboardAudioMessage): Promise<void> {
+  if (!message.mediaSoundUrl || !message.padId) return;
+  const audio = new Audio(message.mediaSoundUrl);
+  audio.volume = Math.max(0, Math.min(1, message.volume ?? 0.8));
+  const audios = soundboardMediaAudioByPad.get(message.padId) ?? new Set<HTMLAudioElement>();
+  const cleanup = () => {
+    audios.delete(audio);
+    activeAudio.delete(audio);
+    if (audios.size === 0) soundboardMediaAudioByPad.delete(message.padId!);
+  };
+  audios.add(audio);
+  activeAudio.add(audio);
+  soundboardMediaAudioByPad.set(message.padId, audios);
+  audio.addEventListener("ended", cleanup, { once: true });
+  audio.addEventListener("error", cleanup, { once: true });
+  try {
+    await audio.play();
+    setAppAudioOutputStatus("ready");
+  } catch {
+    cleanup();
+    setAppAudioOutputStatus("needs-interaction");
   }
 }
 

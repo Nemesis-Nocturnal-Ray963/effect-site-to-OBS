@@ -1,7 +1,13 @@
 ﻿import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { stat } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { AssetCatalogItem, AssetKind } from "@obs-effect/shared-types";
+
+const requireFromHere = createRequire(import.meta.url);
+const ffmpegPath = requireFromHere("ffmpeg-static") as string | null;
 
 interface AssetCatalogFile {
   assets: AssetCatalogItem[];
@@ -83,13 +89,22 @@ export async function registerAssetRoutes(app: FastifyInstance, rootDir: string)
       return reply.code(415).send({ error: "Only image, video, audio, and font assets can be uploaded" });
     }
 
-    const asset = await saveUploadedAsset(rootDir, {
-      body: request.body,
-      originalFileName: fileName,
-      mimeType,
-      kind,
-      now: new Date().toISOString()
-    });
+    let asset: AssetCatalogItem;
+    try {
+      asset = await saveUploadedAsset(rootDir, {
+        body: request.body,
+        originalFileName: fileName,
+        mimeType,
+        kind,
+        now: new Date().toISOString()
+      });
+    } catch (error) {
+      if (error instanceof AssetConversionError) {
+        request.log.warn({ error: error.message, fileName }, "MOV to WebM conversion failed");
+        return reply.code(422).send({ error: error.message });
+      }
+      throw error;
+    }
 
     return reply.code(201).send({ asset });
   });
@@ -125,23 +140,54 @@ async function saveUploadedAsset(
   const extension = path.extname(safeOriginalName);
   const baseName = path.basename(safeOriginalName, extension);
   const id = `asset-${slugify(baseName)}-${Date.now().toString(36)}`;
-  const storedFileName = `${id}${extension || extensionFromMimeType(upload.mimeType)}`;
+  const isMov = upload.kind === "video" && (extension.toLowerCase() === ".mov" || upload.mimeType === "video/quicktime");
+  const storedFileName = isMov ? `${id}.webm` : `${id}${extension || extensionFromMimeType(upload.mimeType)}`;
+  const sourceFileName = isMov ? `${id}.source${extension || ".mov"}` : null;
+  const storedPath = path.join(filesDir, storedFileName);
 
-  await writeFile(path.join(filesDir, storedFileName), upload.body);
+  if (isMov && sourceFileName) {
+    const sourcePath = path.join(filesDir, sourceFileName);
+    await writeFile(sourcePath, upload.body);
+    try {
+      await convertMovToAlphaWebm(sourcePath, storedPath);
+    } catch (error) {
+      await Promise.all([unlink(sourcePath).catch(() => undefined), unlink(storedPath).catch(() => undefined)]);
+      throw error;
+    }
+  } else {
+    await writeFile(storedPath, upload.body);
+  }
+
+  const storedSize = (await stat(storedPath)).size;
+  const hasEmbeddedAudio = upload.kind === "video" ? await videoHasAudioTrack(storedPath) : false;
 
   const asset: AssetCatalogItem = {
     id,
     kind: upload.kind,
     name: baseName || "Uploaded asset",
-    description: "Uploaded from the control UI.",
+    description: isMov ? "MOV converted to VP9 WebM with alpha preserved." : "Uploaded from the control UI.",
     fileName: storedFileName,
     contentUrl: `/asset-files/${encodeURIComponent(storedFileName)}`,
-    mimeType: upload.mimeType,
-    sizeBytes: upload.body.length,
+    mimeType: isMov ? "video/webm" : upload.mimeType,
+    sizeBytes: storedSize,
     createdAt: upload.now,
     updatedAt: upload.now,
     source: "local-copy",
-    tags: ["uploaded"]
+    tags: isMov ? ["uploaded", "converted", "alpha"] : ["uploaded"],
+    ...(upload.kind === "video" ? { hasEmbeddedAudio } : {}),
+    ...(isMov && sourceFileName ? {
+      convertedFrom: {
+        fileName: sourceFileName,
+        contentUrl: `/asset-files/${encodeURIComponent(sourceFileName)}`,
+        mimeType: upload.mimeType,
+        sizeBytes: upload.body.length
+      },
+      conversion: {
+        type: "mov-to-webm-alpha" as const,
+        videoCodec: "vp9" as const,
+        alphaPreserved: true as const
+      }
+    } : {})
   };
 
   const catalog = await loadCatalog(rootDir);
@@ -176,11 +222,72 @@ async function deleteAsset(rootDir: string, assetId: string): Promise<AssetCatal
   const filesDir = path.join(rootDir, "data", "assets", "files");
   const storedPath = path.join(filesDir, path.basename(asset.fileName));
   await unlink(storedPath).catch(() => undefined);
+  if (asset.convertedFrom?.fileName) {
+    await unlink(path.join(filesDir, path.basename(asset.convertedFrom.fileName))).catch(() => undefined);
+  }
   await writeCatalog(
     rootDir,
     catalog.filter((item) => item.id !== assetId)
   );
   return asset;
+}
+
+class AssetConversionError extends Error {}
+
+async function convertMovToAlphaWebm(inputPath: string, outputPath: string): Promise<void> {
+  if (!ffmpegPath) throw new AssetConversionError("FFmpegが利用できないため、MOVをWebMへ変換できませんでした。");
+
+  const args = [
+    "-hide_banner",
+    "-loglevel", "error",
+    "-y",
+    "-i", inputPath,
+    "-map", "0:v:0",
+    "-map", "0:a:0?",
+    "-c:v", "libvpx-vp9",
+    "-pix_fmt", "yuva420p",
+    "-lossless", "1",
+    "-row-mt", "1",
+    "-auto-alt-ref", "0",
+    "-metadata:s:v:0", "alpha_mode=1",
+    "-c:a", "libopus",
+    "-b:a", "192k",
+    outputPath
+  ];
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(ffmpegPath, args, { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (stderr.length < 12_000) stderr += chunk.toString("utf8");
+    });
+    child.once("error", () => reject(new AssetConversionError("FFmpegを起動できませんでした。")));
+    child.once("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const detail = stderr.trim().split(/\r?\n/u).slice(-2).join(" ");
+      reject(new AssetConversionError(`MOVのWebM変換に失敗しました。${detail ? ` ${detail}` : ""}`));
+    });
+  });
+}
+
+async function videoHasAudioTrack(inputPath: string): Promise<boolean> {
+  if (!ffmpegPath) return false;
+  return await new Promise<boolean>((resolve) => {
+    const child = spawn(ffmpegPath, [
+      "-hide_banner",
+      "-loglevel", "error",
+      "-i", inputPath,
+      "-map", "0:a:0",
+      "-frames:a", "1",
+      "-f", "null",
+      "-"
+    ], { windowsHide: true });
+    child.once("error", () => resolve(false));
+    child.once("close", (code) => resolve(code === 0));
+  });
 }
 
 function assetIdFromParams(params: unknown): string | null {

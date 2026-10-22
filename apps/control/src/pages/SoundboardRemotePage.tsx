@@ -29,9 +29,9 @@ export function SoundboardRemotePage(): React.ReactElement {
     setActivePadId(pad.id);
     try {
       const result = await playSoundboardPad(pad.id, token);
-      if (!pad.audioAssetId) {
+      if (!pad.audioAssetId && !result.audio) {
         setStatus(`実行：${pad.label}（音声未設定）`);
-      } else if (!result.audio) {
+      } else if (pad.audioAssetId && !result.audio) {
         setStatus(`音声が見つかりません：${pad.label}`);
       } else {
         setStatus(`実行：${pad.label}`);

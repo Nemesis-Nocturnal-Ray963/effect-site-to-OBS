@@ -344,6 +344,18 @@ export interface AssetCatalogItem {
   updatedAt: string;
   source: "bundled" | "local-copy" | "external";
   tags: string[];
+  hasEmbeddedAudio?: boolean;
+  convertedFrom?: {
+    fileName: string;
+    contentUrl: string;
+    mimeType: string;
+    sizeBytes: number;
+  };
+  conversion?: {
+    type: "mov-to-webm-alpha";
+    videoCodec: "vp9";
+    alphaPreserved: true;
+  };
 }
 
 export type RuntimeObjectType =
@@ -464,6 +476,7 @@ export interface SoundboardAudioMessage {
   executionId: string;
   padId?: string;
   soundUrl?: string;
+  mediaSoundUrl?: string;
   volume?: number;
   retriggerMode?: SoundboardRetriggerMode;
   createdAt: string;

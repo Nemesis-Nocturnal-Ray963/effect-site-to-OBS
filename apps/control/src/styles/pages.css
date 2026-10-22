@@ -1353,6 +1353,23 @@ tbody tr:hover {
   object-fit: cover;
 }
 
+.asset-preview-video {
+  background-color: #d1d5db;
+  background-image:
+    linear-gradient(45deg, #ffffff 25%, transparent 25%),
+    linear-gradient(-45deg, #ffffff 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ffffff 75%),
+    linear-gradient(-45deg, transparent 75%, #ffffff 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+}
+
+.asset-preview-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .asset-preview-placeholder {
   color: #a8a8a0;
   font-weight: 700;

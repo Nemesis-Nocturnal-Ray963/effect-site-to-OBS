@@ -112,6 +112,7 @@ async function playPad(pad: SoundboardPad, options: SoundboardRouteOptions): Pro
   const byId = new Map(assets.map((asset) => [asset.id, asset]));
   const visualAsset = pad.visualAssetId ? byId.get(pad.visualAssetId) : undefined;
   const audioAsset = pad.audioAssetId ? byId.get(pad.audioAssetId) : undefined;
+  const mediaSoundUrl = visualAsset?.kind === "video" && visualAsset.hasEmbeddedAudio ? visualAsset.contentUrl : undefined;
   const executionId = `soundboard-${pad.id}-${Date.now()}`;
   const createdAt = options.now();
 
@@ -156,20 +157,21 @@ async function playPad(pad: SoundboardPad, options: SoundboardRouteOptions): Pro
     options.overlays.broadcastToOverlay(pad.targetOverlayId, message);
   }
 
-  if (audioAsset?.kind === "audio") {
+  if (audioAsset?.kind === "audio" || mediaSoundUrl) {
     options.broadcastToControl({
       type: "soundboard:audio",
       action: "play",
       executionId,
       padId: pad.id,
-      soundUrl: audioAsset.contentUrl,
+      soundUrl: audioAsset?.kind === "audio" ? audioAsset.contentUrl : undefined,
+      mediaSoundUrl,
       volume: pad.audioVolume,
       retriggerMode: pad.retriggerMode,
       createdAt
     });
   }
 
-  return { executionId, visual: Boolean(visualAsset), audio: audioAsset?.kind === "audio" };
+  return { executionId, visual: Boolean(visualAsset), audio: audioAsset?.kind === "audio" || Boolean(mediaSoundUrl) };
 }
 
 function hasToken(header: string | string[] | undefined, expected: string): boolean {

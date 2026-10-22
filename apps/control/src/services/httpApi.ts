@@ -563,6 +563,9 @@ export async function uploadAsset(file: File): Promise<AssetCatalogItem> {
     if (response.status === 415) {
       throw new Error("対応している画像、動画、音声、フォントファイルを選択してください。");
     }
+    if (response.status === 422) {
+      throw new Error(typeof data.error === "string" ? data.error : "MOVからWebMへの変換に失敗しました。");
+    }
     throw new Error(typeof data.error === "string" ? data.error : "Failed to upload asset");
   }
   return data.asset;
