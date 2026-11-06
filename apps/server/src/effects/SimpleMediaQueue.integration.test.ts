@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import type { EffectPlayMessage } from "@obs-effect/shared-types";
 import { createApp } from "../app.js";
 
-it("waits for the active overlay to finish before playing Simple Media on another overlay", async () => {
+it("uses reported video duration to recover when the active overlay omits completion", async () => {
   const rootDir = await mkdtemp(path.join(tmpdir(), "obs-effect-simple-media-queue-"));
   const app = await createApp({ rootDir });
   await app.ready();
@@ -41,9 +41,10 @@ it("waits for the active overlay to finish before playing Simple Media on anothe
     expect(played2).toHaveLength(0);
 
     overlay1.send(JSON.stringify({
-      type: "effect:simple-media-complete",
+      type: "effect:simple-media-duration",
       overlayId: 1,
       instanceId: played1[0]!.instanceId,
+      durationMs: 10,
       createdAt: new Date().toISOString()
     }));
     await vi.waitFor(() => expect(played2).toHaveLength(1));

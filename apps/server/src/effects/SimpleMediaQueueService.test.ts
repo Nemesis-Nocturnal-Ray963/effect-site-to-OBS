@@ -55,4 +55,25 @@ describe("SimpleMediaQueueService", () => {
     expect(broadcasts[0]?.runtimeData?.simpleMediaQueueWaitingCount).toBe(12);
     queue.dispose();
   });
+
+  it("advances after the video duration plus 0.5 seconds when completion is missing", async () => {
+    vi.useFakeTimers();
+    try {
+      const broadcasts: EffectPlayMessage[] = [];
+      const queue = new SimpleMediaQueueService({ broadcast: (_overlayId, effect) => broadcasts.push(effect) });
+      queue.enqueue({ instanceId: "first", targetOverlayId: 1, createMessage: () => message("first", 1) });
+      queue.enqueue({ instanceId: "second", targetOverlayId: 1, createMessage: () => message("second", 1) });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(broadcasts).toHaveLength(1);
+      expect(queue.reportVideoDuration("first", 1000)).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(1499);
+      expect(broadcasts).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(broadcasts).toHaveLength(2);
+      queue.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -544,6 +544,13 @@ export type ClientInteractionMessage =
       overlayId: OverlayId;
       instanceId: string;
       createdAt: string;
+    }
+  | {
+      type: "effect:simple-media-duration";
+      overlayId: OverlayId;
+      instanceId: string;
+      durationMs: number;
+      createdAt: string;
     };
 
 export interface OverlayVersionMessage {

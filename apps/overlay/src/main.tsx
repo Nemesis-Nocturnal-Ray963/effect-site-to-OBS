@@ -823,6 +823,15 @@ function OverlayApp(): React.ReactElement {
       createdAt: new Date().toISOString()
     });
   }, [overlayId]);
+  const reportSimpleMediaDuration = React.useCallback((instanceId: string, durationMs: number) => {
+    sendSocketMessage(socketRef.current, {
+      type: "effect:simple-media-duration",
+      overlayId,
+      instanceId,
+      durationMs,
+      createdAt: new Date().toISOString()
+    });
+  }, [overlayId]);
 
   React.useEffect(() => {
     let ws: WebSocket | null = null;
@@ -941,6 +950,7 @@ function OverlayApp(): React.ReactElement {
           key={item.id}
           item={item}
           onComplete={completeSimpleMedia}
+          onVideoDuration={reportSimpleMediaDuration}
         />
       ))}
       {ballRevealQueue[0] ? (
@@ -2266,7 +2276,15 @@ function easeInCubic(value: number): number {
   return t * t * t;
 }
 
-function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onComplete: (instanceId: string) => void }): React.ReactElement {
+function SimpleMediaView({
+  item,
+  onComplete,
+  onVideoDuration
+}: {
+  item: SimpleMediaPlayback;
+  onComplete: (instanceId: string) => void;
+  onVideoDuration: (instanceId: string, durationMs: number) => void;
+}): React.ReactElement {
   const parameters = item.message.parameters ?? {};
   const visual = item.message.visual;
   const imageEnabled = booleanParam(parameters.imageEnabled, true);
@@ -2384,6 +2402,10 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
           playsInline
           loop={videoLoop}
           muted={booleanParam(parameters.videoMuted, false)}
+          onLoadedMetadata={(event) => {
+            const durationMs = event.currentTarget.duration * 1000;
+            if (Number.isFinite(durationMs) && durationMs > 0) onVideoDuration(item.id, durationMs);
+          }}
           onTimeUpdate={handleVideoTimeUpdate}
           onEnded={handleVideoEnded}
           onError={beginExit}

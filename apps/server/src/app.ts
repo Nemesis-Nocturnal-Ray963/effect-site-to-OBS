@@ -98,7 +98,8 @@ function parseInteractionMessage(payload: unknown): ClientInteractionMessage | n
       parsed.type === "interaction:clear-overlay" ||
       parsed.type === "runtime:snapshot-request" ||
       parsed.type === "overlay:hello" ||
-      parsed.type === "effect:simple-media-complete"
+      parsed.type === "effect:simple-media-complete" ||
+      parsed.type === "effect:simple-media-duration"
     ) {
       return parsed as ClientInteractionMessage;
     }
@@ -562,6 +563,8 @@ export async function createApp(options: CreateAppOptions) {
       broadcastRuntime(overlayId, runtimeInteractionService.snapshotMessage(overlayId));
     } else if (message.type === "effect:simple-media-complete") {
       simpleMediaQueueService.complete(message.instanceId);
+    } else if (message.type === "effect:simple-media-duration") {
+      simpleMediaQueueService.reportVideoDuration(message.instanceId, message.durationMs);
     }
   }
 

@@ -16,6 +16,8 @@ export class SimpleMediaQueueService {
   private activeInstanceId: string | null = null;
   private pumping = false;
   private fallbackTimer: NodeJS.Timeout | null = null;
+  private activeDispatchedAt = 0;
+  private activePlaybackRate = 1;
 
   constructor(private readonly options: SimpleMediaQueueServiceOptions) {}
 
@@ -33,7 +35,16 @@ export class SimpleMediaQueueService {
     if (this.fallbackTimer) clearTimeout(this.fallbackTimer);
     this.fallbackTimer = null;
     this.activeInstanceId = null;
+    this.activeDispatchedAt = 0;
+    this.activePlaybackRate = 1;
     void this.pump();
+    return true;
+  }
+
+  reportVideoDuration(instanceId: string, durationMs: number): boolean {
+    if (instanceId !== this.activeInstanceId || !Number.isFinite(durationMs) || durationMs <= 0) return false;
+    const expectedEndAt = this.activeDispatchedAt + durationMs / this.activePlaybackRate + 500;
+    this.scheduleFallback(instanceId, Math.max(0, expectedEndAt - Date.now()));
     return true;
   }
 
@@ -46,6 +57,8 @@ export class SimpleMediaQueueService {
     this.fallbackTimer = null;
     this.pending.length = 0;
     this.activeInstanceId = null;
+    this.activeDispatchedAt = 0;
+    this.activePlaybackRate = 1;
   }
 
   private async pump(): Promise<void> {
@@ -58,20 +71,26 @@ export class SimpleMediaQueueService {
       if (this.activeInstanceId !== job.instanceId) return;
       const waitingCount = this.pending.length;
       const playbackRate = waitingCount > 10 ? 1.1 : 1;
+      this.activePlaybackRate = playbackRate;
       message.runtimeData = {
         ...message.runtimeData,
         simpleMediaQueueWaitingCount: waitingCount,
         simpleMediaPlaybackRate: playbackRate
       };
+      this.activeDispatchedAt = Date.now();
       this.options.broadcast(job.targetOverlayId, message);
-      const fallbackTimeoutMs = this.options.fallbackTimeoutMs ?? 30 * 60 * 1000;
-      this.fallbackTimer = setTimeout(() => this.complete(job.instanceId), fallbackTimeoutMs);
-      this.fallbackTimer.unref?.();
+      this.scheduleFallback(job.instanceId, this.options.fallbackTimeoutMs ?? 30 * 60 * 1000);
     } catch {
       if (this.activeInstanceId === job.instanceId) this.activeInstanceId = null;
     } finally {
       this.pumping = false;
       if (!this.activeInstanceId) void this.pump();
     }
+  }
+
+  private scheduleFallback(instanceId: string, delayMs: number): void {
+    if (this.fallbackTimer) clearTimeout(this.fallbackTimer);
+    this.fallbackTimer = setTimeout(() => this.complete(instanceId), delayMs);
+    this.fallbackTimer.unref?.();
   }
 }
