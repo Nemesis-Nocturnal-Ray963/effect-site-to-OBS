@@ -285,6 +285,7 @@ export interface ResolvedEffectMedia {
 export type SimpleLayerAnimation = "none" | "fade" | "scale" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "bounce";
 export type SimpleMediaFit = "contain" | "cover" | "fill" | "none";
 export type SimpleTransitionType = "none" | "fade" | "scale" | "slide-up" | "slide-down" | "slide-left" | "slide-right";
+export type SimpleMediaVideoEndBehavior = "fade-after" | "fade-before" | "immediate" | "hold-then-fade";
 
 export interface SimpleTransition {
   type: SimpleTransitionType;
@@ -303,6 +304,9 @@ export interface SimpleMediaParameters {
   videoLoop?: boolean;
   videoVolume?: number;
   videoMuted?: boolean;
+  videoAssetIdsCsv?: string;
+  videoEndBehavior?: SimpleMediaVideoEndBehavior;
+  videoEndHoldMs?: number;
   audioEnabled?: boolean;
   audioVolume?: number;
   audioStartDelayMs?: number;

@@ -5,7 +5,7 @@ export const simpleMediaEffectDefinition: EffectDefinition = {
   kind: "simple-media",
   name: "Simple Media Effect",
   description: "Combine image, video, audio, text, and background layers without adding source code.",
-  version: "1.0.0",
+  version: "1.2.0",
   supportsImage: true,
   supportsVideo: true,
   supportsAudio: true,
@@ -29,9 +29,35 @@ export const simpleMediaEffectDefinition: EffectDefinition = {
       },
       { key: "imageOpacity", label: "Image opacity", type: "number", defaultValue: 1, min: 0, max: 1, step: 0.05 },
       { key: "videoEnabled", label: "Video enabled", type: "boolean", defaultValue: false },
+      { key: "videoAssetIdsCsv", label: "Random video pool", type: "string", defaultValue: "" },
+      {
+        key: "videoFit",
+        label: "Video fit",
+        type: "select",
+        defaultValue: "fill",
+        options: [
+          { value: "fill", label: "Stretch to overlay" },
+          { value: "contain", label: "Contain" },
+          { value: "cover", label: "Cover" },
+          { value: "none", label: "Original size" }
+        ]
+      },
       { key: "videoLoop", label: "Video loop", type: "boolean", defaultValue: false },
       { key: "videoVolume", label: "Video volume", type: "number", defaultValue: 0.8, min: 0, max: 1, step: 0.05 },
       { key: "videoMuted", label: "Video muted", type: "boolean", defaultValue: false },
+      {
+        key: "videoEndBehavior",
+        label: "When video ends",
+        type: "select",
+        defaultValue: "fade-after",
+        options: [
+          { value: "fade-after", label: "Fade after playback ends" },
+          { value: "fade-before", label: "Fade before playback ends" },
+          { value: "immediate", label: "End immediately" },
+          { value: "hold-then-fade", label: "Hold final frame, then fade" }
+        ]
+      },
+      { key: "videoEndHoldMs", label: "Final frame hold ms", type: "number", defaultValue: 500, min: 0, max: 60000, step: 50 },
       { key: "audioEnabled", label: "Audio enabled", type: "boolean", defaultValue: false },
       { key: "audioVolume", label: "Audio volume", type: "number", defaultValue: 0.8, min: 0, max: 1, step: 0.05 },
       { key: "audioStartDelayMs", label: "Audio delay", type: "number", defaultValue: 0, min: 0, max: 60000, step: 50 },

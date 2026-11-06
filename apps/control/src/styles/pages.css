@@ -998,14 +998,28 @@ tbody tr:hover {
   position: fixed;
   top: 0;
   right: 0;
-  z-index: 20;
-  width: min(520px, 100vw);
+  z-index: 31;
+  width: min(760px, 100vw);
   height: 100vh;
   overflow: auto;
-  padding: 24px;
+  padding: 0 28px 32px;
   border-left: 1px solid #303030;
-  background: #181917;
-  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.35);
+  background: #141513;
+  box-shadow: -24px 0 70px rgba(0, 0, 0, 0.58);
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(2px);
+  cursor: default;
 }
 
 .drawer-header {
@@ -1016,9 +1030,103 @@ tbody tr:hover {
   margin-bottom: 18px;
 }
 
+.detail-drawer > .drawer-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0 -28px 22px;
+  padding: 22px 28px 18px;
+  border-bottom: 1px solid #30322e;
+  background: rgba(20, 21, 19, 0.96);
+  backdrop-filter: blur(12px);
+}
+
 .drawer-header h3 {
+  margin: 2px 0 4px;
   overflow-wrap: anywhere;
 }
+
+.effect-settings-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #30322e;
+  border-radius: 14px;
+  background: #1a1b18;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.settings-section-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.settings-section-heading h4 {
+  margin: 1px 0 4px;
+  color: #f4f5ec;
+  font-size: 16px;
+}
+
+.settings-section-heading p {
+  margin: 0;
+  color: #92968b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-section-index {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #4b6656;
+  border-radius: 9px;
+  background: #20372b;
+  color: #b9f6d0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-section .form-grid > label {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: #c9cbc2;
+  font-size: 13px;
+}
+
+.settings-section .form-grid > label small {
+  color: #8e9188;
+  line-height: 1.45;
+}
+
+.settings-section .form-grid input:disabled,
+.settings-section .form-grid select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-subsection-title {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 3px;
+  margin-top: 6px;
+  padding: 13px 14px;
+  border-left: 3px solid #5c9973;
+  border-radius: 0 8px 8px 0;
+  background: #20221e;
+}
+
+.settings-subsection-title:first-child { margin-top: 0; }
+.settings-subsection-title strong { color: #e8eadf; font-size: 13px; }
+.settings-subsection-title span { color: #8e9188; font-size: 11px; }
 
 .tab-row {
   display: flex;
@@ -1054,7 +1162,34 @@ tbody tr:hover {
 .drawer-actions {
   display: grid;
   gap: 14px;
+  margin-top: 16px;
 }
+
+.drawer-actions .button-row { padding-top: 2px; }
+
+.danger-button {
+  border-color: #70413f;
+  color: #ffb4ad;
+}
+
+.danger-button:hover {
+  border-color: #a95a55;
+  background: #3b2422;
+}
+
+.technical-details {
+  padding-top: 4px;
+  border-top: 1px solid #30322e;
+}
+
+.technical-details summary {
+  padding: 10px 0 2px;
+  color: #9da096;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.technical-details .json-block { margin: 12px 0 0; }
 
 .json-block {
   max-height: 58vh;
@@ -1972,8 +2107,36 @@ tbody tr:hover {
 .preset-parameters {
   display: grid;
   gap: 14px;
-  padding-top: 16px;
-  border-top: 1px solid #303030;
+}
+
+.preset-effect-settings {
+  gap: 16px;
+}
+
+.preset-settings-section .preset-full-width,
+.preset-settings-section .preset-parameters,
+.preset-settings-section .combo-sound-settings,
+.preset-settings-section .media-pool-editor,
+.preset-manage-row {
+  grid-column: 1 / -1;
+}
+
+.preset-parameter-grid > label,
+.preset-settings-section .combo-sound-grid > label {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: #c9cbc2;
+  font-size: 13px;
+}
+
+.preset-manage-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.preset-slot-detail > .drawer-header {
+  margin-bottom: 2px;
 }
 
 .overlay-card {
@@ -2055,6 +2218,20 @@ tbody tr:hover {
   .form-grid {
     grid-template-columns: 1fr;
   }
+
+  .detail-drawer {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .detail-drawer > .drawer-header {
+    margin-right: -16px;
+    margin-left: -16px;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .settings-section { padding: 16px; }
 
   .combo-sound-grid {
     grid-template-columns: 1fr;

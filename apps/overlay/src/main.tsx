@@ -863,9 +863,6 @@ function OverlayApp(): React.ReactElement {
             : current;
           return [...retained, item];
         });
-        window.setTimeout(() => {
-          setSimpleMedia((current) => current.filter((active) => active.id !== item.id));
-        }, durationMs);
       } else if (message.type === "effect:play" && message.effectId === "ball-reveal") {
         const play = message as EffectPlayMessage;
         const item: BallRevealPlayback = { id: play.instanceId, message: play };
@@ -917,7 +914,11 @@ function OverlayApp(): React.ReactElement {
         />
       ))}
       {simpleMedia.map((item) => (
-        <SimpleMediaView key={item.id} item={item} />
+        <SimpleMediaView
+          key={item.id}
+          item={item}
+          onComplete={() => setSimpleMedia((current) => current.filter((active) => active.id !== item.id))}
+        />
       ))}
       {ballRevealQueue[0] ? (
         <BallRevealView
@@ -2242,7 +2243,7 @@ function easeInCubic(value: number): number {
   return t * t * t;
 }
 
-function SimpleMediaView({ item }: { item: SimpleMediaPlayback }): React.ReactElement {
+function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onComplete: () => void }): React.ReactElement {
   const parameters = item.message.parameters ?? {};
   const visual = item.message.visual;
   const imageEnabled = booleanParam(parameters.imageEnabled, true);
@@ -2252,17 +2253,78 @@ function SimpleMediaView({ item }: { item: SimpleMediaPlayback }): React.ReactEl
   const backgroundEnabled = booleanParam(parameters.backgroundEnabled, false);
   const padding = numberParam(parameters.backgroundPadding, 24);
   const borderRadius = numberParam(parameters.backgroundBorderRadius, 18);
-  const scale = visual?.size.scale ?? 1;
+  const isFullOverlayVideo = videoEnabled && Boolean(item.message.media?.videoUrl);
+  const scale = isFullOverlayVideo ? 1 : (visual?.size.scale ?? 1);
   const x = visual?.position.mode === "normalized" ? visual.position.x * 100 : 50;
   const y = visual?.position.mode === "normalized" ? visual.position.y * 100 : 50;
   const width = visual?.size.width ? `${visual.size.width}${visual.size.unit === "px" ? "px" : "%"}` : "auto";
   const height = visual?.size.height ? `${visual.size.height}${visual.size.unit === "px" ? "px" : "%"}` : "auto";
   const enterTransition = stringParam(parameters.enterTransition, "fade");
   const exitTransition = stringParam(parameters.exitTransition, "fade");
+  const exitDurationMs = Math.max(0, numberParam(parameters.exitDurationMs, 250));
+  const videoLoop = booleanParam(parameters.videoLoop, false);
+  const hasFiniteVideo = videoEnabled && Boolean(item.message.media?.videoUrl) && !videoLoop;
+  const endBehavior = stringParam(parameters.videoEndBehavior, "fade-after");
+  const [phase, setPhase] = React.useState<"entering" | "playing" | "exiting">("entering");
+  const completionStartedRef = React.useRef(false);
+  const exitTimerRef = React.useRef<number | null>(null);
+  const holdTimerRef = React.useRef<number | null>(null);
+
+  const complete = React.useCallback(() => {
+    if (completionStartedRef.current) return;
+    completionStartedRef.current = true;
+    onComplete();
+  }, [onComplete]);
+
+  const beginExit = React.useCallback(() => {
+    if (completionStartedRef.current || exitTimerRef.current !== null) return;
+    if (exitTransition === "none" || exitDurationMs === 0) {
+      complete();
+      return;
+    }
+    setPhase("exiting");
+    exitTimerRef.current = window.setTimeout(complete, exitDurationMs);
+  }, [complete, exitDurationMs, exitTransition]);
+
+  React.useEffect(() => {
+    const enterTimer = window.setTimeout(
+      () => setPhase((current) => current === "exiting" ? current : "playing"),
+      Math.max(0, numberParam(parameters.enterDurationMs, 250))
+    );
+    let exitStartTimer: number | undefined;
+    if (!hasFiniteVideo) {
+      const lifetimeMs = Math.max(0, item.durationMs);
+      exitStartTimer = window.setTimeout(beginExit, Math.max(0, lifetimeMs - exitDurationMs));
+    }
+    return () => {
+      window.clearTimeout(enterTimer);
+      if (exitStartTimer !== undefined) window.clearTimeout(exitStartTimer);
+      if (exitTimerRef.current !== null) window.clearTimeout(exitTimerRef.current);
+      if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
+    };
+  }, [beginExit, exitDurationMs, hasFiniteVideo, item.durationMs, parameters.enterDurationMs]);
+
+  function handleVideoTimeUpdate(event: React.SyntheticEvent<HTMLVideoElement>): void {
+    if (endBehavior !== "fade-before" || completionStartedRef.current || exitTimerRef.current !== null) return;
+    const video = event.currentTarget;
+    if (Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= Math.max(0, video.duration - exitDurationMs / 1000)) {
+      beginExit();
+    }
+  }
+
+  function handleVideoEnded(): void {
+    if (endBehavior === "immediate" || endBehavior === "fade-before") {
+      complete();
+    } else if (endBehavior === "hold-then-fade") {
+      holdTimerRef.current = window.setTimeout(beginExit, Math.max(0, numberParam(parameters.videoEndHoldMs, 500)));
+    } else {
+      beginExit();
+    }
+  }
 
   return (
     <div
-      className={`simple-media simple-enter-${enterTransition} simple-exit-${exitTransition}`}
+      className={`simple-media ${isFullOverlayVideo ? "simple-media-full-overlay" : ""} simple-phase-${phase} simple-enter-${enterTransition} simple-exit-${exitTransition}`}
       style={{
         left: `${x}%`,
         top: `${y}%`,
@@ -2271,9 +2333,8 @@ function SimpleMediaView({ item }: { item: SimpleMediaPlayback }): React.ReactEl
         opacity: visual?.opacity ?? 1,
         zIndex: visual?.zIndex ?? 10,
         "--simple-scale": String(scale),
-        "--simple-duration": `${item.durationMs}ms`,
         "--simple-enter-ms": `${numberParam(parameters.enterDurationMs, 250)}ms`,
-        "--simple-exit-ms": `${numberParam(parameters.exitDurationMs, 250)}ms`,
+        "--simple-exit-ms": `${exitDurationMs}ms`,
         padding: backgroundEnabled ? `${padding}px` : 0,
         borderRadius: backgroundEnabled ? `${borderRadius}px` : 0,
         backgroundColor: backgroundEnabled
@@ -2295,9 +2356,15 @@ function SimpleMediaView({ item }: { item: SimpleMediaPlayback }): React.ReactEl
           src={item.message.media.videoUrl}
           autoPlay
           playsInline
-          loop={booleanParam(parameters.videoLoop, false)}
+          loop={videoLoop}
           muted={booleanParam(parameters.videoMuted, false)}
-          style={{ objectFit: fitParam(parameters.videoFit) }}
+          onTimeUpdate={handleVideoTimeUpdate}
+          onEnded={handleVideoEnded}
+          onError={beginExit}
+          ref={(video) => {
+            if (video) video.volume = Math.max(0, Math.min(1, numberParam(parameters.videoVolume, 0.8)));
+          }}
+          style={{ objectFit: fitParam(parameters.videoFit ?? "fill") }}
         />
       ) : null}
       {audioEnabled && item.message.media?.audioUrl ? (

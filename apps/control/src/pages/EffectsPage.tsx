@@ -269,31 +269,34 @@ export function EffectsPage(): React.ReactElement {
       {effectRows.length === 0 ? <p className="empty-text">{t("No effects available.")}</p> : null}
 
       {selected ? (
-        <EffectDrawer
-          configuration={selected}
-          definitions={definitions}
-          overlays={overlays.length ? overlays : Array.from({ length: 10 }, (_, index) => ({ overlayId: (index + 1) as OverlayId, width: 1920, height: 1080 }))}
-          assets={assets}
-          gifts={gifts}
-          fonts={fonts}
-          onClose={() => setSelectedId(null)}
-          onPatch={patchSelected}
-          onDelete={removeSelected}
-          onDuplicate={async () => {
-            const duplicate = await duplicateEffectConfiguration(selected.id);
-            await reload();
-            setSelectedId(duplicate.id);
-            setMessage(t("Duplicated"));
-          }}
-          onToggle={async () => {
-            const updated = await setEffectConfigurationEnabled(selected.id, !selected.enabled);
-            setConfigurations((items) => items.map((item) => (item.id === updated.id ? updated : item)));
-          }}
-          onTest={async (pitchingScenario, options) => {
-            await testEffectConfiguration(selected.id, options ?? (pitchingScenario ? { pitchingScenario } : undefined));
-            setMessage(`Test sent to Overlay ${selected.targetOverlayId}`);
-          }}
-        />
+        <>
+          <button className="drawer-backdrop" type="button" aria-label={t("Close")} onClick={() => setSelectedId(null)} />
+          <EffectDrawer
+            configuration={selected}
+            definitions={definitions}
+            overlays={overlays.length ? overlays : Array.from({ length: 10 }, (_, index) => ({ overlayId: (index + 1) as OverlayId, width: 1920, height: 1080 }))}
+            assets={assets}
+            gifts={gifts}
+            fonts={fonts}
+            onClose={() => setSelectedId(null)}
+            onPatch={patchSelected}
+            onDelete={removeSelected}
+            onDuplicate={async () => {
+              const duplicate = await duplicateEffectConfiguration(selected.id);
+              await reload();
+              setSelectedId(duplicate.id);
+              setMessage(t("Duplicated"));
+            }}
+            onToggle={async () => {
+              const updated = await setEffectConfigurationEnabled(selected.id, !selected.enabled);
+              setConfigurations((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+            }}
+            onTest={async (pitchingScenario, options) => {
+              await testEffectConfiguration(selected.id, options ?? (pitchingScenario ? { pitchingScenario } : undefined));
+              setMessage(`Test sent to Overlay ${selected.targetOverlayId}`);
+            }}
+          />
+        </>
       ) : null}
     </section>
   );
@@ -316,7 +319,7 @@ interface EffectDrawerProps {
 
 function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
   const { t } = useI18n();
-  const { configuration } = props;
+  const { configuration, onClose } = props;
   const condition = configuration.trigger.conditions[0] ?? { type: "manual" as const };
   const definition = props.definitions.find((item) => item.id === configuration.effectDefinitionId);
   const imageAssets = props.assets.filter((asset) => asset.kind === "image");
@@ -329,6 +332,14 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
   const isGiftComboText = configuration.effectDefinitionId === "gift-combo-text";
   const isGiftPile = configuration.effectDefinitionId === "gift-pile";
   const selectedOverlay = props.overlays.find((overlay) => overlay.overlayId === configuration.targetOverlayId);
+
+  React.useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent): void {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
 
   function patchCondition(next: EffectTriggerCondition): Promise<void> {
     return props.onPatch({ trigger: { mode: configuration.trigger.mode, conditions: [next] } });
@@ -375,6 +386,10 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
     return parameterString("mediaAssetIdsCsv", "").split(",").map((item) => item.trim()).filter(Boolean);
   }
 
+  function selectedRandomVideoIds(): string[] {
+    return parameterString("videoAssetIdsCsv", "").split(",").map((item) => item.trim()).filter(Boolean);
+  }
+
   return (
     <aside className="detail-drawer">
       <div className="drawer-header">
@@ -383,12 +398,13 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
           <h3>{configuration.name}</h3>
           <p className="empty-text">{definition?.name ?? configuration.effectDefinitionId}</p>
         </div>
-        <button type="button" onClick={props.onClose}>
+        <button type="button" onClick={onClose}>
           {t("Close")}
         </button>
       </div>
 
-      <div className="form-grid">
+      <div className="effect-settings-stack">
+      <SettingsSection index="1" title={t("Basics")} description={t("Name the effect and choose where it appears.")}>
         <label>
           {t("Name")}
           <input value={configuration.name} onChange={(event) => void props.onPatch({ name: event.target.value })} />
@@ -406,6 +422,9 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             ))}
           </select>
         </label>
+      </SettingsSection>
+
+      <SettingsSection index="2" title={t("Trigger")} description={t("Choose the event that starts this effect.")}>
         <label>
           {t("Trigger")}
           <select value={condition.type} onChange={(event) => void patchCondition(newCondition(event.target.value as EffectTriggerCondition["type"]))}>
@@ -493,16 +512,22 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             </select>
           </label>
         ) : null}
+      </SettingsSection>
+
+      <SettingsSection index="3" title={t("Timing")} description={t("Control duration and repeated playback.")}>
         <label>
           {t("Duration")}
           <input
             type="number"
-            disabled={isGiftPile}
+            disabled={isGiftPile || (isSimpleMedia && (Boolean(configuration.media.videoAssetId) || selectedRandomVideoIds().length > 0) && parameterBoolean("videoEnabled", false) && !parameterBoolean("videoLoop", false))}
             min="50"
             step="50"
             value={configuration.playback.durationMs}
             onChange={(event) => void props.onPatch({ playback: { durationMs: Number(event.target.value) } })}
           />
+          {isSimpleMedia && (Boolean(configuration.media.videoAssetId) || selectedRandomVideoIds().length > 0) && parameterBoolean("videoEnabled", false) && !parameterBoolean("videoLoop", false)
+            ? <small>{t("A non-looping video plays until the video itself ends.")}</small>
+            : null}
         </label>
         <label>
           {t("Cooldown")}
@@ -514,8 +539,15 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             onChange={(event) => void props.onPatch({ playback: { cooldownMs: Number(event.target.value) } })}
           />
         </label>
+      </SettingsSection>
+
+      <SettingsSection index="4" title={t("Effect settings")} description={t("Configure media, appearance, motion, and effect-specific behavior.")}>
         {isSimpleMedia ? (
           <>
+            <div className="settings-subsection-title">
+              <strong>{t("Media sources")}</strong>
+              <span>{t("Choose the layers used by this effect.")}</span>
+            </div>
             <label>
               {t("Image asset")}
               <select
@@ -543,7 +575,21 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
                   </option>
                 ))}
               </select>
+              <small>{t("Used when the random video pool is empty.")}</small>
             </label>
+            <MediaAssetPoolEditor
+              assets={props.assets}
+              kinds={["video"]}
+              selectedIds={selectedRandomVideoIds()}
+              title={t("Random video pool")}
+              summary={`${selectedRandomVideoIds().length} ${t("videos / one is chosen at random per trigger")}`}
+              emptyMessage={t("Add videos to randomly choose one for each trigger.")}
+              onChange={(ids) => props.onPatch({ visual: { parameters: {
+                ...configuration.visual.parameters,
+                videoAssetIdsCsv: ids.join(","),
+                videoEnabled: ids.length > 0 ? true : parameterBoolean("videoEnabled", false)
+              } } })}
+            />
             <label>
               {t("Audio asset")}
               <select
@@ -574,6 +620,39 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
               />
               {t("Video enabled")}
             </label>
+            <div className="settings-subsection-title">
+              <strong>{t("Video playback")}</strong>
+              <span>{t("Fit the video and decide how playback finishes.")}</span>
+            </div>
+            <label>
+              {t("Video fit")}
+              <select value={parameterString("videoFit", "fill")} onChange={(event) => void patchParameter("videoFit", event.target.value)}>
+                <option value="fill">{t("Stretch to overlay")}</option>
+                <option value="contain">{t("Contain")}</option>
+                <option value="cover">{t("Cover")}</option>
+                <option value="none">{t("Original size")}</option>
+              </select>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={parameterBoolean("videoLoop", false)}
+                onChange={(event) => void patchParameter("videoLoop", event.target.checked)}
+              />
+              {t("Video loop")}
+            </label>
+            <label>
+              {t("When video ends")}
+              <select value={parameterString("videoEndBehavior", "fade-after")} onChange={(event) => void patchParameter("videoEndBehavior", event.target.value)}>
+                <option value="fade-after">{t("Fade after playback ends")}</option>
+                <option value="fade-before">{t("Fade before playback ends")}</option>
+                <option value="immediate">{t("End immediately")}</option>
+                <option value="hold-then-fade">{t("Hold final frame, then fade")}</option>
+              </select>
+            </label>
+            {parameterString("videoEndBehavior", "fade-after") === "hold-then-fade" ? (
+              <NumberField label={t("Final frame hold ms")} value={parameterNumber("videoEndHoldMs", 500)} min={0} max={60000} step={50} onChange={(value) => patchParameter("videoEndHoldMs", value)} />
+            ) : null}
             <label className="checkbox-row">
               <input
                 type="checkbox"
@@ -582,6 +661,10 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
               />
               {t("Audio enabled")}
             </label>
+            <div className="settings-subsection-title">
+              <strong>{t("Text and background")}</strong>
+              <span>{t("Add optional text and improve its readability.")}</span>
+            </div>
             <label className="checkbox-row">
               <input
                 type="checkbox"
@@ -616,6 +699,10 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
               />
             </label>
             <NumberField label={t("Background opacity")} value={parameterNumber("backgroundOpacity", 0.4)} min={0} max={1} step={0.05} onChange={(value) => patchParameter("backgroundOpacity", value)} />
+            <div className="settings-subsection-title">
+              <strong>{t("Transitions")}</strong>
+              <span>{t("Choose how the effect enters and leaves.")}</span>
+            </div>
             <label>
               {t("Enter transition")}
               <select value={parameterString("enterTransition", "fade")} onChange={(event) => void patchParameter("enterTransition", event.target.value)}>
@@ -628,6 +715,20 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
                 <option value="slide-right">{t("Slide right")}</option>
               </select>
             </label>
+            <NumberField label={t("Enter duration")} value={parameterNumber("enterDurationMs", 250)} min={0} max={10000} step={50} onChange={(value) => patchParameter("enterDurationMs", value)} />
+            <label>
+              {t("Exit transition")}
+              <select value={parameterString("exitTransition", "fade")} onChange={(event) => void patchParameter("exitTransition", event.target.value)}>
+                <option value="none">{t("None")}</option>
+                <option value="fade">{t("Fade")}</option>
+                <option value="scale">{t("Scale")}</option>
+                <option value="slide-up">{t("Slide up")}</option>
+                <option value="slide-down">{t("Slide down")}</option>
+                <option value="slide-left">{t("Slide left")}</option>
+                <option value="slide-right">{t("Slide right")}</option>
+              </select>
+            </label>
+            <NumberField label={t("Exit duration")} value={parameterNumber("exitDurationMs", 250)} min={0} max={10000} step={50} onChange={(value) => patchParameter("exitDurationMs", value)} />
           </>
         ) : null}
         {isBallReveal ? (
@@ -1039,9 +1140,17 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             </label>
           </>
         ) : null}
+      </SettingsSection>
       </div>
 
-      <div className="drawer-actions">
+      <section className="drawer-actions settings-section">
+        <div className="settings-section-heading">
+          <span className="settings-section-index">5</span>
+          <div>
+            <h4>{t("Test and manage")}</h4>
+            <p>{t("Preview the result, change its status, or manage this configuration.")}</p>
+          </div>
+        </div>
         <EffectGiftTestControls
           gifts={props.gifts}
           onTest={(options) => props.onTest(undefined, options)}
@@ -1069,13 +1178,36 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
           <button type="button" onClick={() => void props.onDuplicate()}>
             {t("Duplicate")}
           </button>
-          <button type="button" onClick={() => void props.onDelete()}>
+          <button className="danger-button" type="button" onClick={() => void props.onDelete()}>
             {t("Delete")}
           </button>
         </div>
-        <pre className="json-block">{JSON.stringify(configuration, null, 2)}</pre>
-      </div>
+        <details className="technical-details">
+          <summary>{t("Technical details")}</summary>
+          <pre className="json-block">{JSON.stringify(configuration, null, 2)}</pre>
+        </details>
+      </section>
     </aside>
+  );
+}
+
+function SettingsSection(props: {
+  index: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <section className="settings-section">
+      <div className="settings-section-heading">
+        <span className="settings-section-index">{props.index}</span>
+        <div>
+          <h4>{props.title}</h4>
+          <p>{props.description}</p>
+        </div>
+      </div>
+      <div className="form-grid">{props.children}</div>
+    </section>
   );
 }
 

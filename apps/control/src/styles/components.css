@@ -180,9 +180,29 @@ input[type="color"] {
   gap: 10px;
 }
 
-.media-pool-header { justify-content: space-between; }
+.media-pool-header {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
 .media-pool-header > div:first-child,
 .media-pool-name { display: grid; gap: 3px; }
+.media-pool-header > div:first-child {
+  flex: 1 1 220px;
+  min-width: min(220px, 100%);
+}
+.media-pool-header strong,
+.media-pool-header small {
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.media-pool-add {
+  flex: 1 1 300px;
+  min-width: min(280px, 100%);
+}
+.media-pool-add select {
+  min-width: 0;
+  flex: 1;
+}
 .media-pool-header small,
 .media-pool-name small { color: var(--muted); }
 .media-pool-list { display: grid; gap: 8px; max-height: 360px; overflow: auto; }

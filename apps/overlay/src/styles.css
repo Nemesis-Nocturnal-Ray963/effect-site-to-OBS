@@ -977,9 +977,19 @@ body {
   min-height: 80px;
   overflow: hidden;
   transform: translate(-50%, -50%) scale(var(--simple-scale, 1));
-  animation-duration: var(--simple-duration, 3000ms);
+  box-sizing: border-box;
+  animation-duration: var(--simple-enter-ms, 250ms);
   animation-fill-mode: both;
   pointer-events: none;
+}
+
+.simple-media-full-overlay {
+  left: 50% !important;
+  top: 50% !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
 }
 
 .ball-reveal-stage {
@@ -1231,8 +1241,8 @@ body {
   grid-area: 1 / 1;
   width: 100%;
   height: 100%;
-  max-width: 80vw;
-  max-height: 80vh;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .simple-media-image {
@@ -1241,6 +1251,11 @@ body {
 
 .simple-media-video {
   object-fit: contain;
+}
+
+.simple-media-full-overlay .simple-media-video {
+  position: absolute;
+  inset: 0;
 }
 
 .simple-media-text {
@@ -1252,28 +1267,44 @@ body {
 }
 
 .simple-enter-fade {
-  animation-name: simple-media-fade;
+  animation-name: simple-media-enter-fade;
 }
 
 .simple-enter-scale {
-  animation-name: simple-media-scale;
+  animation-name: simple-media-enter-scale;
 }
 
 .simple-enter-slide-up {
-  animation-name: simple-media-slide-up;
+  animation-name: simple-media-enter-slide-up;
 }
 
 .simple-enter-slide-down {
-  animation-name: simple-media-slide-down;
+  animation-name: simple-media-enter-slide-down;
 }
 
 .simple-enter-slide-left {
-  animation-name: simple-media-slide-left;
+  animation-name: simple-media-enter-slide-left;
 }
 
 .simple-enter-slide-right {
-  animation-name: simple-media-slide-right;
+  animation-name: simple-media-enter-slide-right;
 }
+
+.simple-phase-playing {
+  animation: none;
+}
+
+.simple-phase-exiting {
+  animation-duration: var(--simple-exit-ms, 250ms);
+  animation-fill-mode: forwards;
+}
+
+.simple-phase-exiting.simple-exit-fade { animation-name: simple-media-exit-fade; }
+.simple-phase-exiting.simple-exit-scale { animation-name: simple-media-exit-scale; }
+.simple-phase-exiting.simple-exit-slide-up { animation-name: simple-media-exit-slide-up; }
+.simple-phase-exiting.simple-exit-slide-down { animation-name: simple-media-exit-slide-down; }
+.simple-phase-exiting.simple-exit-slide-left { animation-name: simple-media-exit-slide-left; }
+.simple-phase-exiting.simple-exit-slide-right { animation-name: simple-media-exit-slide-right; }
 
 @keyframes flash-pop {
   0% {
@@ -1289,86 +1320,72 @@ body {
   }
 }
 
-@keyframes simple-media-fade {
-  0%,
-  100% {
-    opacity: 0;
-  }
+@keyframes simple-media-enter-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes simple-media-exit-fade { from { opacity: 1; } to { opacity: 0; } }
 
-  12%,
-  88% {
-    opacity: 1;
-  }
-}
-
-@keyframes simple-media-scale {
-  0%,
-  100% {
+@keyframes simple-media-enter-scale {
+  from {
     opacity: 0;
     transform: translate(-50%, -50%) scale(calc(var(--simple-scale, 1) * 0.82));
   }
-
-  12%,
-  88% {
+  to {
     opacity: 1;
     transform: translate(-50%, -50%) scale(var(--simple-scale, 1));
   }
 }
+@keyframes simple-media-exit-scale { from { opacity: 1; } to { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--simple-scale, 1) * 0.82)); } }
 
-@keyframes simple-media-slide-up {
-  0%,
-  100% {
+@keyframes simple-media-enter-slide-up {
+  from {
     opacity: 0;
     translate: 0 28px;
   }
 
-  12%,
-  88% {
+  to {
     opacity: 1;
     translate: 0 0;
   }
 }
 
-@keyframes simple-media-slide-down {
-  0%,
-  100% {
+@keyframes simple-media-enter-slide-down {
+  from {
     opacity: 0;
     translate: 0 -28px;
   }
 
-  12%,
-  88% {
+  to {
     opacity: 1;
     translate: 0 0;
   }
 }
 
-@keyframes simple-media-slide-left {
-  0%,
-  100% {
+@keyframes simple-media-enter-slide-left {
+  from {
     opacity: 0;
     translate: 28px 0;
   }
 
-  12%,
-  88% {
+  to {
     opacity: 1;
     translate: 0 0;
   }
 }
 
-@keyframes simple-media-slide-right {
-  0%,
-  100% {
+@keyframes simple-media-enter-slide-right {
+  from {
     opacity: 0;
     translate: -28px 0;
   }
 
-  12%,
-  88% {
+  to {
     opacity: 1;
     translate: 0 0;
   }
 }
+
+@keyframes simple-media-exit-slide-up { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 -28px; } }
+@keyframes simple-media-exit-slide-down { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 28px; } }
+@keyframes simple-media-exit-slide-left { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: -28px 0; } }
+@keyframes simple-media-exit-slide-right { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 28px 0; } }
 
 .gift-pile-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }

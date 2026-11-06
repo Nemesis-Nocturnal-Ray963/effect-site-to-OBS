@@ -41,6 +41,7 @@ import { registerSoundboardRoutes } from "./api/routes/soundboard.js";
 import { SoundboardRepository } from "./soundboard/SoundboardRepository.js";
 import { OverlayConfigurationJsonRepository } from "./overlays/OverlayConfigurationJsonRepository.js";
 import { EffectConfigurationJsonRepository } from "./effects/EffectConfigurationJsonRepository.js";
+import { chooseRandomVideoAsset } from "./effects/simpleMediaVideoPool.js";
 import { EffectConfigurationService, effectMessageFromConfiguration } from "./effects/EffectConfigurationService.js";
 import { FallingImageEffectService } from "./effects/builtins/fallingImage.js";
 import { GiftComboTextEffectService } from "./effects/builtins/giftComboText.js";
@@ -236,6 +237,9 @@ export async function createApp(options: CreateAppOptions) {
     const byId = new Map(assets.map((asset) => [asset.id, asset]));
     const configuredImageUrl = configuration.media?.imageAssetId ? byId.get(configuration.media.imageAssetId)?.contentUrl : undefined;
     const parameters = configuration.visual?.parameters ?? {};
+    const selectedVideo = configuration.effectDefinitionId === "simple-media"
+      ? chooseRandomVideoAsset(assets, stringList(parameters.videoAssetIdsCsv))
+      : undefined;
     let imageUrl = configuredImageUrl ? await giftImageCache.resolve(configuredImageUrl) : undefined;
     if (configuration.effectDefinitionId === "simple-media" && parameters.imageSourceMode !== "asset" &&
         (!configuredImageUrl || parameters.imageSourceMode === "gift-image" || parameters.imageSourceMode === "event-image")) {
@@ -245,7 +249,7 @@ export async function createApp(options: CreateAppOptions) {
     }
     return {
       imageUrl,
-      videoUrl: configuration.media?.videoAssetId ? byId.get(configuration.media.videoAssetId)?.contentUrl : undefined,
+      videoUrl: selectedVideo?.contentUrl ?? (configuration.media?.videoAssetId ? byId.get(configuration.media.videoAssetId)?.contentUrl : undefined),
       audioUrl: configuration.media?.audioAssetId ? byId.get(configuration.media.audioAssetId)?.contentUrl : undefined
     };
   }

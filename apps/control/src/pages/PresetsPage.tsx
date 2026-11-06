@@ -52,6 +52,7 @@ const triggerOptions: Array<{ value: EffectTriggerCondition["type"]; label: stri
 
 const pitchingCustomParameterKeys = new Set(["ballAssetId", "launchAudioAssetId", "impactAudioAssetId", "audioVolume", "targetXPercent", "targetYPercent"]);
 const ballRevealCustomParameterKeys = new Set(["ballAssetId", "mediaAssetIdsCsv", "targetXPercent", "targetYPercent"]);
+const simpleMediaCustomParameterKeys = new Set(["videoAssetIdsCsv"]);
 const giftComboSoundParameterKeys = new Set([
   "soundEnabled",
   "soundAssetId",
@@ -437,6 +438,8 @@ function SlotEditor(props: {
   const isBallReveal = props.slot.effectDefinitionId === "ball-reveal";
   const isGiftComboText = props.slot.effectDefinitionId === "gift-combo-text";
   const isGiftPile = props.slot.effectDefinitionId === "gift-pile";
+  const isSimpleMedia = props.slot.effectDefinitionId === "simple-media";
+  const hasMediaSettings = Boolean(definition?.supportsImage || definition?.supportsVideo || definition?.supportsAudio || isBallReveal || isPitchingMachineBall);
   const selectedOverlay = props.overlays.find((overlay) => overlay.overlayId === props.slot.targetOverlayId);
   const [giftPickerOpen, setGiftPickerOpen] = React.useState(false);
   const [giftSearch, setGiftSearch] = React.useState("");
@@ -502,12 +505,10 @@ function SlotEditor(props: {
           <p className="eyebrow">{t("Preset Effect")}</p>
           <h3>{props.slot.name}</h3>
         </div>
-        <button type="button" onClick={() => void props.onDelete()}>
-          {t("Delete")}
-        </button>
       </div>
 
-      <div className="form-grid">
+      <div className="effect-settings-stack preset-effect-settings">
+      <PresetSettingsSection index="1" title={t("Basics")} description={t("Name this preset effect, choose its type, and select an output.")}>
         <label>
           {t("Slot name")}
           <DeferredTextInput value={props.slot.name} onCommit={(value) => props.onPatch({ name: value })} />
@@ -536,6 +537,9 @@ function SlotEditor(props: {
             ))}
           </select>
         </label>
+      </PresetSettingsSection>
+
+      <PresetSettingsSection index="2" title={t("Trigger")} description={t("Choose the event that starts this preset effect.")}>
         <label>
           {t("Trigger")}
           <select value={condition.type} onChange={(event) => void patchCondition(newCondition(event.target.value as EffectTriggerCondition["type"]))}>
@@ -677,11 +681,15 @@ function SlotEditor(props: {
             onChange={(value) => patchCondition({ ...condition, minimumCoinValue: value })}
           />
         ) : null}
+      </PresetSettingsSection>
+
+      <PresetSettingsSection index="3" title={t("Playback and layout")} description={t("Control timing, layering, size, and placement.")}>
         <NumberField
           label={t("Duration ms")}
           value={props.slot.playback.durationMs}
           min={50}
           step={50}
+          disabled={isSimpleMedia && (Boolean(props.slot.media.videoAssetId) || Boolean(String(props.slot.visual.parameters.videoAssetIdsCsv ?? "").trim())) && props.slot.visual.parameters.videoEnabled === true && props.slot.visual.parameters.videoLoop !== true}
           onChange={(value) => props.onPatch({ playback: { durationMs: value } })}
         />
         <NumberField
@@ -743,6 +751,10 @@ function SlotEditor(props: {
           <input type="checkbox" checked={props.slot.enabled} onChange={(event) => void props.onPatch({ enabled: event.target.checked })} />
           {t("Enabled")}
         </label>
+      </PresetSettingsSection>
+
+      {hasMediaSettings ? (
+      <PresetSettingsSection index="4" title={t("Media sources")} description={t("Choose the image, video, and audio assets used by this effect.")}>
         {isBallReveal ? (
           <>
             <MediaAssetPoolEditor
@@ -791,7 +803,23 @@ function SlotEditor(props: {
                 </option>
               ))}
             </select>
+            {isSimpleMedia ? <small>{t("Used when the random video pool is empty.")}</small> : null}
           </label>
+        ) : null}
+        {isSimpleMedia ? (
+          <MediaAssetPoolEditor
+            assets={props.assets}
+            kinds={["video"]}
+            selectedIds={String(props.slot.visual.parameters.videoAssetIdsCsv ?? "").split(",").map((item) => item.trim()).filter(Boolean)}
+            title={t("Random video pool")}
+            summary={`${String(props.slot.visual.parameters.videoAssetIdsCsv ?? "").split(",").map((item) => item.trim()).filter(Boolean).length} ${t("videos / one is chosen at random per trigger")}`}
+            emptyMessage={t("Add videos to randomly choose one for each trigger.")}
+            onChange={(ids) => props.onPatch({ visual: { parameters: {
+              ...props.slot.visual.parameters,
+              videoAssetIdsCsv: ids.join(","),
+              videoEnabled: ids.length > 0 ? true : props.slot.visual.parameters.videoEnabled
+            } } })}
+          />
         ) : null}
         {definition?.supportsAudio && !isPitchingMachineBall && !isGiftComboText ? (
           <label className="preset-asset-field">
@@ -877,10 +905,12 @@ function SlotEditor(props: {
             />
           </>
         ) : null}
-      </div>
+      </PresetSettingsSection>
+      ) : null}
 
       {isGiftComboText ? (
-        <section className="combo-sound-settings">
+        <PresetSettingsSection index={String(4 + Number(hasMediaSettings))} title={t("Sound settings")} description={t("Configure the sound and pitch behavior for this effect.")}>
+        <section className="combo-sound-settings preset-full-width">
           <div className="combo-sound-header">
             <h3>{t("Combo sound")}</h3>
             <label className="checkbox-row">
@@ -911,11 +941,12 @@ function SlotEditor(props: {
             <NumberField label={t("Pitch curve strength")} value={numberParameter(props.slot.visual.parameters.pitchCurveStrength, 0.01)} min={0.0001} max={1} step={0.001} onChange={(value) => patchParameter("pitchCurveStrength", value)} />
           </div>
         </section>
+        </PresetSettingsSection>
       ) : null}
 
       {definition ? (
-        <section className="preset-parameters">
-          <h3>{t("Effect parameters")}</h3>
+        <PresetSettingsSection index={String(4 + Number(hasMediaSettings) + Number(isGiftComboText))} title={t("Effect parameters")} description={t("Fine-tune behavior specific to the selected effect.")}>
+          <div className="preset-parameters preset-full-width">
           {isGiftPile ? (
             <>
               <GiftPileOverridesEditor
@@ -930,31 +961,80 @@ function SlotEditor(props: {
               />
             </>
           ) : null}
-          <div className="form-grid">
+          <div className="form-grid preset-parameter-grid">
             {definition.parameterSchema.fields
               .filter((field) => !isPitchingMachineBall || !pitchingCustomParameterKeys.has(field.key))
               .filter((field) => !isBallReveal || !ballRevealCustomParameterKeys.has(field.key))
               .filter((field) => !isGiftComboText || !giftComboSoundParameterKeys.has(field.key))
               .filter((field) => !isGiftPile || field.key !== "giftSizeOverridesJson")
               .filter((field) => !isGiftPile || field.key !== "coinImageRulesJson")
-              .map((field) => (
-              <ParameterField
-                key={field.key}
-                field={field}
-                value={props.slot.visual.parameters[field.key] ?? field.defaultValue}
-                fonts={props.fonts}
-                onChange={(value) => patchParameter(field.key, value)}
-              />
-            ))}
+              .filter((field) => !isSimpleMedia || !simpleMediaCustomParameterKeys.has(field.key))
+              .map((field) => {
+                const groupLabel = isSimpleMedia ? simpleMediaParameterGroup(field.key) : null;
+                return (
+                  <React.Fragment key={field.key}>
+                    {groupLabel ? (
+                      <div className="settings-subsection-title">
+                        <strong>{t(groupLabel)}</strong>
+                      </div>
+                    ) : null}
+                    <ParameterField
+                      field={field}
+                      value={props.slot.visual.parameters[field.key] ?? field.defaultValue}
+                      fonts={props.fonts}
+                      onChange={(value) => patchParameter(field.key, value)}
+                    />
+                  </React.Fragment>
+                );
+              })}
           </div>
-        </section>
+          </div>
+        </PresetSettingsSection>
       ) : null}
+      <PresetSettingsSection index={String(4 + Number(hasMediaSettings) + Number(isGiftComboText) + Number(Boolean(definition)))} title={t("Manage")} description={t("Remove this effect from the preset.")}>
+        <div className="preset-manage-row">
+          <button className="danger-button" type="button" onClick={() => void props.onDelete()}>
+            {t("Delete")}
+          </button>
+        </div>
+      </PresetSettingsSection>
+      </div>
+    </section>
+  );
+}
+
+function PresetSettingsSection(props: {
+  index: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <section className="settings-section preset-settings-section">
+      <div className="settings-section-heading">
+        <span className="settings-section-index">{props.index}</span>
+        <div>
+          <h4>{props.title}</h4>
+          <p>{props.description}</p>
+        </div>
+      </div>
+      <div className="form-grid">{props.children}</div>
     </section>
   );
 }
 
 function numberParameter(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function simpleMediaParameterGroup(key: string): string | null {
+  if (key === "imageEnabled") return "Image settings";
+  if (key === "videoEnabled") return "Video playback";
+  if (key === "audioEnabled") return "Audio settings";
+  if (key === "textEnabled") return "Text settings";
+  if (key === "backgroundEnabled") return "Background settings";
+  if (key === "enterTransition") return "Transitions";
+  return null;
 }
 
 function ParameterField(props: {
@@ -1117,6 +1197,7 @@ function NumberField(props: {
   min?: number;
   max?: number;
   step?: number;
+  disabled?: boolean;
   onChange: (value: number) => Promise<void>;
 }): React.ReactElement {
   return (
@@ -1128,6 +1209,7 @@ function NumberField(props: {
         max={props.max}
         step={props.step ?? 1}
         value={props.value}
+        disabled={props.disabled}
         onChange={(event) => void props.onChange(Number(event.target.value))}
       />
     </label>

@@ -7,9 +7,13 @@ export function MediaAssetPoolEditor(props: {
   selectedIds: string[];
   onChange: (ids: string[]) => Promise<void>;
   title?: string;
+  kinds?: Array<"image" | "video">;
+  summary?: string;
+  emptyMessage?: string;
 }): React.ReactElement {
   const { t } = useI18n();
-  const candidates = props.assets.filter((asset) => asset.kind === "image" || asset.kind === "video");
+  const kinds = props.kinds ?? ["image", "video"];
+  const candidates = props.assets.filter((asset) => (asset.kind === "image" || asset.kind === "video") && kinds.includes(asset.kind));
   const selected = props.selectedIds.map((id) => ({ id, asset: props.assets.find((item) => item.id === id) }));
   const [pendingId, setPendingId] = React.useState("");
   const remaining = candidates.filter((asset) => !props.selectedIds.includes(asset.id));
@@ -19,11 +23,11 @@ export function MediaAssetPoolEditor(props: {
       <div className="media-pool-header">
         <div>
           <strong>{props.title ?? t("Random media list")}</strong>
-          <small>{selected.length} {t("items / shuffled without repetition")}</small>
+          <small>{props.summary ?? `${selected.length} ${t("items / shuffled without repetition")}`}</small>
         </div>
         <div className="media-pool-add">
           <select value={pendingId} onChange={(event) => setPendingId(event.target.value)}>
-            <option value="">{t("Choose image or video")}</option>
+            <option value="">{kinds.length === 1 && kinds[0] === "video" ? t("Choose video") : t("Choose image or video")}</option>
             {remaining.map((asset) => (
               <option key={asset.id} value={asset.id}>{asset.name} ({asset.kind})</option>
             ))}
@@ -39,7 +43,7 @@ export function MediaAssetPoolEditor(props: {
           >{t("Add")}</button>
         </div>
       </div>
-      {selected.length === 0 ? <p className="empty-text">{t("Add at least one image or video.")}</p> : (
+      {selected.length === 0 ? <p className="empty-text">{props.emptyMessage ?? t("Add at least one image or video.")}</p> : (
         <div className="media-pool-list">
           {selected.map(({ id, asset }, index) => (
             <article key={id} className="media-pool-row">
