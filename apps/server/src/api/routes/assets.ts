@@ -8,6 +8,7 @@ import type { AssetCatalogItem, AssetKind } from "@obs-effect/shared-types";
 
 const requireFromHere = createRequire(import.meta.url);
 const ffmpegPath = requireFromHere("ffmpeg-static") as string | null;
+const durationProbeCache = new Map<string, Promise<number | undefined>>();
 
 interface AssetCatalogFile {
   assets: AssetCatalogItem[];
@@ -159,7 +160,9 @@ async function saveUploadedAsset(
   }
 
   const storedSize = (await stat(storedPath)).size;
-  const hasEmbeddedAudio = upload.kind === "video" ? await videoHasAudioTrack(storedPath) : false;
+  const [hasEmbeddedAudio, durationMs] = upload.kind === "video"
+    ? await Promise.all([videoHasAudioTrack(storedPath), probeMediaDurationMs(storedPath)])
+    : [false, undefined];
 
   const asset: AssetCatalogItem = {
     id,
@@ -175,6 +178,7 @@ async function saveUploadedAsset(
     source: "local-copy",
     tags: isMov ? ["uploaded", "converted", "alpha"] : ["uploaded"],
     ...(upload.kind === "video" ? { hasEmbeddedAudio } : {}),
+    ...(durationMs ? { durationMs } : {}),
     ...(isMov && sourceFileName ? {
       convertedFrom: {
         fileName: sourceFileName,
@@ -287,6 +291,41 @@ async function videoHasAudioTrack(inputPath: string): Promise<boolean> {
     ], { windowsHide: true });
     child.once("error", () => resolve(false));
     child.once("close", (code) => resolve(code === 0));
+  });
+}
+
+export async function resolveAssetDurationMs(rootDir: string, asset: AssetCatalogItem | undefined): Promise<number | undefined> {
+  if (!asset || asset.kind !== "video") return undefined;
+  if (typeof asset.durationMs === "number" && Number.isFinite(asset.durationMs) && asset.durationMs > 0) {
+    return asset.durationMs;
+  }
+  if (asset.source !== "local-copy") return undefined;
+  const inputPath = path.join(rootDir, "data", "assets", "files", path.basename(asset.fileName));
+  const cached = durationProbeCache.get(inputPath);
+  if (cached) return await cached;
+  const pending = probeMediaDurationMs(inputPath).then((durationMs) => {
+    if (!durationMs) durationProbeCache.delete(inputPath);
+    return durationMs;
+  });
+  durationProbeCache.set(inputPath, pending);
+  return await pending;
+}
+
+async function probeMediaDurationMs(inputPath: string): Promise<number | undefined> {
+  if (!ffmpegPath) return undefined;
+  return await new Promise<number | undefined>((resolve) => {
+    const child = spawn(ffmpegPath, ["-hide_banner", "-i", inputPath], { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (stderr.length < 64_000) stderr += chunk.toString("utf8");
+    });
+    child.once("error", () => resolve(undefined));
+    child.once("close", () => {
+      const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/u);
+      if (!match) return resolve(undefined);
+      const durationMs = Math.round((Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3])) * 1000);
+      resolve(Number.isFinite(durationMs) && durationMs > 0 ? durationMs : undefined);
+    });
   });
 }
 

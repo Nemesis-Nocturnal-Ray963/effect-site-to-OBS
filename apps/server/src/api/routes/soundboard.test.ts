@@ -50,6 +50,25 @@ describe("soundboard routes", () => {
       });
       expect(played.statusCode).toBe(200);
       expect(played.json()).toMatchObject({ accepted: true, visual: true, audio: true });
+
+      const queued = await app.inject({ method: "GET", url: "/api/v1/simple-media/queue" });
+      expect(queued.json()).toMatchObject({ queue: { waitingCount: 1 } });
+
+      const stopPad = { ...pad, label: "Stop Simple Media", action: "stop-simple-media" as const };
+      const stopPadSaved = await app.inject({
+        method: "PUT",
+        url: "/api/v1/soundboard",
+        payload: { ...config.board, pads: [stopPad] }
+      });
+      expect(stopPadSaved.statusCode).toBe(200);
+      const stopped = await app.inject({
+        method: "POST",
+        url: `/api/v1/soundboard/pads/${stopPad.id}/play`,
+        headers: { "x-soundboard-token": config.accessToken }
+      });
+      expect(stopped.json()).toMatchObject({ accepted: true, stoppedSimpleMedia: true });
+      const queueAfterStop = await app.inject({ method: "GET", url: "/api/v1/simple-media/queue" });
+      expect(queueAfterStop.json()).toMatchObject({ queue: { activeInstanceId: null, waitingCount: 0 } });
     } finally {
       await app.close();
       await rm(temporaryRoot, { recursive: true, force: true });

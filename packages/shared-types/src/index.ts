@@ -279,6 +279,7 @@ export interface EffectPreset {
 export interface ResolvedEffectMedia {
   imageUrl?: string;
   videoUrl?: string;
+  videoDurationMs?: number;
   audioUrl?: string;
 }
 
@@ -452,12 +453,14 @@ export interface AppAudioComboMessage {
 }
 
 export type SoundboardRetriggerMode = "restart" | "overlap";
+export type SoundboardPadAction = "play" | "stop-simple-media";
 
 export interface SoundboardPad {
   id: string;
   label: string;
   color: string;
   enabled: boolean;
+  action?: SoundboardPadAction;
   targetOverlayId: OverlayId;
   visualAssetId?: string;
   audioAssetId?: string;

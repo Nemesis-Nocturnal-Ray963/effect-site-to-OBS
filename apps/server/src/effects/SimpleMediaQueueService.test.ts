@@ -76,4 +76,43 @@ describe("SimpleMediaQueueService", () => {
       vi.useRealTimers();
     }
   });
+
+  it("uses the server-resolved video duration without waiting for overlay metadata", async () => {
+    vi.useFakeTimers();
+    try {
+      const broadcasts: EffectPlayMessage[] = [];
+      const queue = new SimpleMediaQueueService({ broadcast: (_overlayId, effect) => broadcasts.push(effect) });
+      const first = { ...message("first", 1), media: { videoUrl: "/first.webm", videoDurationMs: 1000 } };
+      queue.enqueue({ instanceId: "first", targetOverlayId: 1, createMessage: () => first });
+      queue.enqueue({ instanceId: "second", targetOverlayId: 1, createMessage: () => message("second", 1) });
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.advanceTimersByTimeAsync(1499);
+      expect(broadcasts).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(broadcasts).toHaveLength(2);
+      queue.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("waits to dispatch until the target overlay is connected", async () => {
+    let connected = false;
+    const broadcasts: EffectPlayMessage[] = [];
+    const queue = new SimpleMediaQueueService({
+      broadcast: (_overlayId, effect) => broadcasts.push(effect),
+      canDispatch: () => connected
+    });
+    queue.enqueue({ instanceId: "waiting", targetOverlayId: 8, createMessage: () => message("waiting", 8) });
+    await Promise.resolve();
+    expect(broadcasts).toHaveLength(0);
+    expect(queue.status()).toMatchObject({ activeInstanceId: null, waitingCount: 1 });
+
+    connected = true;
+    queue.notifyAvailabilityChanged();
+    await vi.waitFor(() => expect(broadcasts).toHaveLength(1));
+    expect(queue.status()).toMatchObject({ activeInstanceId: "waiting", activeTargetOverlayId: 8, waitingCount: 0 });
+    queue.dispose();
+  });
 });

@@ -59,6 +59,7 @@ export class OverlayConnectionManager {
   }
 
   broadcastToOverlay(overlayId: OverlayId, message: ServerMessage): void {
+    if (message.type === "effect:clear") this.forgetClearedEffects(overlayId, message.effectId);
     this.rememberRecentEffect(overlayId, message);
     const state = this.states.get(overlayId)!;
     for (const client of state.clients) {
@@ -100,6 +101,10 @@ export class OverlayConnectionManager {
     return this.statusList().reduce((total, status) => total + status.connectedClients, 0);
   }
 
+  connectedClients(overlayId: OverlayId): number {
+    return this.states.get(overlayId)?.clients.size ?? 0;
+  }
+
   private rememberRecentEffect(overlayId: OverlayId, message: ServerMessage): void {
     if (message.type !== "effect:play") return;
     const now = Date.now();
@@ -109,6 +114,19 @@ export class OverlayConnectionManager {
     this.recentEffectMessages.set(
       overlayId,
       recent.filter((entry) => now - entry.storedAt <= replayWindowMs).slice(-20)
+    );
+  }
+
+  private forgetClearedEffects(overlayId: OverlayId, effectId?: string): void {
+    if (!effectId) {
+      this.recentEffectMessages.set(overlayId, []);
+      return;
+    }
+    this.recentEffectMessages.set(
+      overlayId,
+      this.recentEffectMessages.get(overlayId)!.filter((entry) =>
+        entry.message.type !== "effect:play" || entry.message.effectId !== effectId
+      )
     );
   }
 

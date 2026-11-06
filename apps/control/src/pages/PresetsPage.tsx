@@ -28,6 +28,7 @@ import {
   fetchSystemFonts,
   savePreset,
   selectPreset,
+  stopSimpleMedia,
   testPreset,
   updatePreset,
   updatePresetSlot,
@@ -375,6 +376,15 @@ function PresetTestPanel(props: {
     }
   }
 
+  async function forceStop(): Promise<void> {
+    try {
+      const result = await stopSimpleMedia();
+      props.onMessage(`${t("Simple Media stopped")} (${result.waitingCleared} ${t("queued items cleared")})`);
+    } catch (error) {
+      props.onMessage(error instanceof Error ? error.message : t("Failed to stop Simple Media"));
+    }
+  }
+
   return (
     <section className="panel preset-test-panel">
       <div>
@@ -390,6 +400,7 @@ function PresetTestPanel(props: {
       <div className="button-row">
         <button type="button" onClick={() => setPickerOpen(true)}>{t("Choose recorded gift")}</button>
         <button type="button" disabled={!selectedGift} onClick={() => void runTest()}>{t("Test preset with gift")}</button>
+        <button className="danger-button" type="button" onClick={() => void forceStop()}>{t("Force stop Simple Media")}</button>
       </div>
       {pickerOpen ? (
         <div className="preset-gift-picker-backdrop" role="dialog" aria-modal="true" aria-label={t("Choose recorded gift")}>

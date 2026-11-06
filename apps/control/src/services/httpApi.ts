@@ -73,6 +73,7 @@ export interface SoundboardPlayResult {
   executionId: string;
   visual: boolean;
   audio: boolean;
+  stoppedSimpleMedia?: boolean;
 }
 
 export async function playSoundboardPad(padId: string, token: string): Promise<SoundboardPlayResult> {
@@ -92,6 +93,17 @@ export async function stopSoundboard(token: string): Promise<void> {
     body: "{}"
   });
   if (!response.ok) throw new Error("Failed to stop soundboard");
+}
+
+export interface SimpleMediaStopResult {
+  activeCleared: boolean;
+  waitingCleared: number;
+}
+
+export async function stopSimpleMedia(): Promise<SimpleMediaStopResult> {
+  const response = await fetch("/api/v1/simple-media/stop", { method: "POST" });
+  if (!response.ok) throw new Error("Failed to stop Simple Media");
+  return ((await response.json()) as { cleared: SimpleMediaStopResult }).cleared;
 }
 
 export interface HttpApiConfig {

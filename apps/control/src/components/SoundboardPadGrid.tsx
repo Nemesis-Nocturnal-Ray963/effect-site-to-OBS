@@ -28,10 +28,13 @@ export function SoundboardPadGrid({ board, activePadId, selectedPadId, onPress, 
         >
           <span>{pad.label}</span>
           <small>
+            {pad.action === "stop-simple-media" ? "Simple Media 停止" : null}
+            {pad.action !== "stop-simple-media" ? <>
             {pad.visualAssetId ? "映像" : ""}
             {pad.visualAssetId && pad.audioAssetId ? " + " : ""}
             {pad.audioAssetId ? "音声" : ""}
             {!pad.visualAssetId && !pad.audioAssetId ? "未設定" : ""}
+            </> : null}
           </small>
         </button>
       ))}

@@ -50,6 +50,8 @@ describe("asset MOV conversion", () => {
         conversion: { type: "mov-to-webm-alpha", videoCodec: "vp9", alphaPreserved: true }
       });
       expect(asset.fileName).toMatch(/\.webm$/u);
+      expect(asset.durationMs).toBeGreaterThanOrEqual(150);
+      expect(asset.durationMs).toBeLessThanOrEqual(300);
       expect(asset.convertedFrom?.fileName).toMatch(/\.source\.mov$/u);
 
       const filesDir = path.join(temporaryRoot, "data", "assets", "files");

@@ -64,7 +64,7 @@ import { registerGiftRoutes } from "./api/routes/gifts.js";
 import { RuntimeEffectObjectStore } from "./runtime/RuntimeEffectObjectStore.js";
 import { RuntimeInteractionService } from "./runtime/RuntimeInteractionService.js";
 import { registerRuntimeRoutes } from "./api/routes/runtime.js";
-import { loadCatalog, registerAssetRoutes } from "./api/routes/assets.js";
+import { loadCatalog, registerAssetRoutes, resolveAssetDurationMs } from "./api/routes/assets.js";
 import { PresetJsonRepository } from "./presets/PresetJsonRepository.js";
 import { PresetService } from "./presets/PresetService.js";
 import { registerPresetRoutes } from "./api/routes/presets.js";
@@ -193,6 +193,7 @@ export async function createApp(options: CreateAppOptions) {
   let giftComboTextEffectService: GiftComboTextEffectService | null = null;
   let giftPileEffectService: GiftPileEffectService | null = null;
   let puyoGameEffectService: PuyoGameEffectService | null = null;
+  let simpleMediaQueueService: SimpleMediaQueueService;
 
   app.addHook("onClose", async () => {
     eventCatalogService.close();
@@ -244,6 +245,8 @@ export async function createApp(options: CreateAppOptions) {
     const selectedVideo = configuration.effectDefinitionId === "simple-media"
       ? chooseRandomVideoAsset(assets, stringList(parameters.videoAssetIdsCsv))
       : undefined;
+    const fixedVideo = configuration.media?.videoAssetId ? byId.get(configuration.media.videoAssetId) : undefined;
+    const resolvedVideo = selectedVideo ?? fixedVideo;
     let imageUrl = configuredImageUrl ? await giftImageCache.resolve(configuredImageUrl) : undefined;
     if (configuration.effectDefinitionId === "simple-media" && parameters.imageSourceMode !== "asset" &&
         (!configuredImageUrl || parameters.imageSourceMode === "gift-image" || parameters.imageSourceMode === "event-image")) {
@@ -253,7 +256,8 @@ export async function createApp(options: CreateAppOptions) {
     }
     return {
       imageUrl,
-      videoUrl: selectedVideo?.contentUrl ?? (configuration.media?.videoAssetId ? byId.get(configuration.media.videoAssetId)?.contentUrl : undefined),
+      videoUrl: resolvedVideo?.contentUrl,
+      videoDurationMs: await resolveAssetDurationMs(rootDir, resolvedVideo),
       audioUrl: configuration.media?.audioAssetId ? byId.get(configuration.media.audioAssetId)?.contentUrl : undefined
     };
   }
@@ -331,12 +335,40 @@ export async function createApp(options: CreateAppOptions) {
     send,
     onStatusChange: () => {
       broadcastStatus();
+      simpleMediaQueueService?.notifyAvailabilityChanged();
     }
   });
-  const simpleMediaQueueService = new SimpleMediaQueueService({
-    broadcast: (overlayId, message) => overlayConnectionManager.broadcastToOverlay(overlayId, message)
+  simpleMediaQueueService = new SimpleMediaQueueService({
+    broadcast: (overlayId, message) => overlayConnectionManager.broadcastToOverlay(overlayId, message),
+    canDispatch: (overlayId) => overlayConnectionManager.connectedClients(overlayId) > 0,
+    onError: (error, instanceId) => recordLog({
+      level: "error",
+      source: "effect",
+      message: "Simple Media queue item failed",
+      detail: { instanceId, error: error instanceof Error ? error.message : String(error) }
+    })
   });
   app.addHook("onClose", async () => simpleMediaQueueService.dispose());
+  const stopSimpleMedia = () => {
+    const cleared = simpleMediaQueueService.clear();
+    overlayConnectionManager.broadcastToAll({
+      type: "effect:clear",
+      effectId: "simple-media",
+      scope: "all-overlays",
+      createdAt: now()
+    });
+    return cleared;
+  };
+  app.get("/api/v1/simple-media/queue", async () => ({ queue: simpleMediaQueueService.status() }));
+  app.delete("/api/v1/simple-media/queue", async () => {
+    const cleared = stopSimpleMedia();
+    return { cleared, queue: simpleMediaQueueService.status() };
+  });
+  app.post("/api/v1/simple-media/stop", async () => ({
+    accepted: true,
+    cleared: stopSimpleMedia(),
+    queue: simpleMediaQueueService.status()
+  }));
   const runtimeInteractionService = new RuntimeInteractionService(runtimeStore, now, broadcastRuntime);
   fallingImageEffectService = new FallingImageEffectService(rootDir, runtimeInteractionService);
   pitchingMachineBallEffectService = new PitchingMachineBallEffectService(rootDir, runtimeInteractionService);
@@ -959,6 +991,7 @@ export async function createApp(options: CreateAppOptions) {
     broadcastToControl,
     now,
     remoteBaseUrl: () => `http://${firstLanAddress()}:${soundboardRemotePort}`,
+    stopSimpleMedia,
     enqueueSimpleMedia: (message) => {
       simpleMediaQueueService.enqueue({
         instanceId: message.instanceId,

@@ -20,6 +20,7 @@ const padSchema = z.object({
   label: z.string().min(1).max(80),
   color: z.string().regex(/^#[0-9a-f]{6}$/iu),
   enabled: z.boolean(),
+  action: z.enum(["play", "stop-simple-media"]).optional(),
   targetOverlayId: overlayIdSchema,
   visualAssetId: z.string().max(200).optional(),
   audioAssetId: z.string().max(200).optional(),
@@ -43,6 +44,7 @@ interface SoundboardRouteOptions {
   now: () => string;
   remoteBaseUrl: () => string;
   enqueueSimpleMedia?: (message: EffectPlayMessage) => void;
+  stopSimpleMedia?: () => { activeCleared: boolean; waitingCleared: number };
 }
 
 export async function registerSoundboardRoutes(app: FastifyInstance, options: SoundboardRouteOptions): Promise<void> {
@@ -90,6 +92,7 @@ export async function registerSoundboardRoutes(app: FastifyInstance, options: So
       return reply.code(401).send({ accepted: false, error: "Invalid soundboard token" });
     }
     const createdAt = options.now();
+    const simpleMedia = options.stopSimpleMedia?.();
     for (let overlayId = 1; overlayId <= 10; overlayId += 1) {
       options.overlays.broadcastToOverlay(overlayId as OverlayId, {
         type: "effect:clear",
@@ -104,11 +107,15 @@ export async function registerSoundboardRoutes(app: FastifyInstance, options: So
       executionId: `soundboard-stop-${Date.now()}`,
       createdAt
     });
-    return { accepted: true };
+    return { accepted: true, simpleMedia };
   });
 }
 
-async function playPad(pad: SoundboardPad, options: SoundboardRouteOptions): Promise<{ executionId: string; visual: boolean; audio: boolean }> {
+async function playPad(pad: SoundboardPad, options: SoundboardRouteOptions): Promise<{ executionId: string; visual: boolean; audio: boolean; stoppedSimpleMedia?: boolean }> {
+  if (pad.action === "stop-simple-media") {
+    options.stopSimpleMedia?.();
+    return { executionId: `soundboard-${pad.id}-${Date.now()}`, visual: false, audio: false, stoppedSimpleMedia: true };
+  }
   const assets = await loadCatalog(options.rootDir);
   const byId = new Map(assets.map((asset) => [asset.id, asset]));
   const visualAsset = pad.visualAssetId ? byId.get(pad.visualAssetId) : undefined;

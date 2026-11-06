@@ -98,6 +98,7 @@ export function SoundboardPage(): React.ReactElement {
       label: `ボタン ${board.pads.length + 1}`,
       color: "#2563eb",
       enabled: true,
+      action: "play",
       targetOverlayId: 1,
       durationMs: 5000,
       audioVolume: 0.8,
@@ -141,6 +142,10 @@ export function SoundboardPage(): React.ReactElement {
         padToPlay = saved.pads.find((item) => item.id === pad.id) ?? pad;
       }
       const result = await playSoundboardPad(padToPlay.id, token);
+      if (result.stoppedSimpleMedia) {
+        setMessage("Simple Mediaを強制停止し、待機キューを破棄しました。");
+        return;
+      }
       const outputs = [result.visual ? "映像" : "", result.audio ? "音声" : ""].filter(Boolean).join("・");
       if (!padToPlay.audioAssetId && !result.audio) {
         setMessage(`「${padToPlay.label}」を実行しました（音声は未設定です）。`);
@@ -215,6 +220,14 @@ export function SoundboardPage(): React.ReactElement {
               <label>色<input type="color" value={selectedPad.color} onChange={(event) => updatePad({ color: event.target.value })} /></label>
               <label className="checkbox-row"><input type="checkbox" checked={selectedPad.enabled} onChange={(event) => updatePad({ enabled: event.target.checked })} />有効</label>
               <label>
+                ボタンの動作
+                <select value={selectedPad.action ?? "play"} onChange={(event) => updatePad({ action: event.target.value as SoundboardPad["action"] })}>
+                  <option value="play">メディアを再生</option>
+                  <option value="stop-simple-media">Simple Mediaを強制停止</option>
+                </select>
+              </label>
+              {selectedPad.action !== "stop-simple-media" ? <>
+              <label>
                 映像・画像
                 <select value={selectedPad.visualAssetId ?? ""} onChange={(event) => updatePad({ visualAssetId: event.target.value || undefined })}>
                   <option value="">なし</option>
@@ -243,6 +256,7 @@ export function SoundboardPage(): React.ReactElement {
                   <option value="overlap">重ねて再生</option>
                 </select>
               </label>
+              </> : <p className="empty-text">押すと、再生中のSimple Mediaを即時停止し、待機中のキューもすべて破棄します。</p>}
             </>
           ) : <p className="empty-text">設定するボタンを選択してください。</p>}
         </aside>

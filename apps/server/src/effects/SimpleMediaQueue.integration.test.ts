@@ -39,6 +39,12 @@ it("uses reported video duration to recover when the active overlay omits comple
     await vi.waitFor(() => expect(played1).toHaveLength(1));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(played2).toHaveLength(0);
+    const queued = await app.inject({ method: "GET", url: "/api/v1/simple-media/queue" });
+    expect(queued.json().queue).toMatchObject({
+      activeInstanceId: played1[0]!.instanceId,
+      activeTargetOverlayId: 1,
+      waitingCount: 1
+    });
 
     overlay1.send(JSON.stringify({
       type: "effect:simple-media-duration",
@@ -48,6 +54,11 @@ it("uses reported video duration to recover when the active overlay omits comple
       createdAt: new Date().toISOString()
     }));
     await vi.waitFor(() => expect(played2).toHaveLength(1));
+    const cleared = await app.inject({ method: "DELETE", url: "/api/v1/simple-media/queue" });
+    expect(cleared.json()).toMatchObject({
+      cleared: { activeCleared: true, waitingCleared: 0 },
+      queue: { activeInstanceId: null, waitingCount: 0 }
+    });
   } finally {
     overlay1.terminate();
     overlay2.terminate();
