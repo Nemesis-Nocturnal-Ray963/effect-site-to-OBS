@@ -42,6 +42,7 @@ interface SoundboardRouteOptions {
   broadcastToControl: (message: ServerMessage) => void;
   now: () => string;
   remoteBaseUrl: () => string;
+  enqueueSimpleMedia?: (message: EffectPlayMessage) => void;
 }
 
 export async function registerSoundboardRoutes(app: FastifyInstance, options: SoundboardRouteOptions): Promise<void> {
@@ -154,7 +155,8 @@ async function playPad(pad: SoundboardPad, options: SoundboardRouteOptions): Pro
       },
       createdAt
     };
-    options.overlays.broadcastToOverlay(pad.targetOverlayId, message);
+    if (options.enqueueSimpleMedia) options.enqueueSimpleMedia(message);
+    else options.overlays.broadcastToOverlay(pad.targetOverlayId, message);
   }
 
   if (audioAsset?.kind === "audio" || mediaSoundUrl) {

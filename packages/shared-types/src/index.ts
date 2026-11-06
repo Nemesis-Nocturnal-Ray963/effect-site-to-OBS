@@ -538,6 +538,12 @@ export type ClientInteractionMessage =
       currentBuildVersion: string;
       currentOverlayConfigVersion?: number;
       createdAt: string;
+    }
+  | {
+      type: "effect:simple-media-complete";
+      overlayId: OverlayId;
+      instanceId: string;
+      createdAt: string;
     };
 
 export interface OverlayVersionMessage {

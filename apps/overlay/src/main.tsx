@@ -799,6 +799,7 @@ function createStandalonePuyoObject(): RuntimeEffectObject {
 
 function OverlayApp(): React.ReactElement {
   const giftPileRef = React.useRef<GiftPileHandle>(null);
+  const socketRef = React.useRef<WebSocket | null>(null);
   const [flashes, setFlashes] = React.useState<Flash[]>([]);
   const [simpleMedia, setSimpleMedia] = React.useState<SimpleMediaPlayback[]>([]);
   const [ballRevealQueue, setBallRevealQueue] = React.useState<BallRevealPlayback[]>([]);
@@ -813,6 +814,15 @@ function OverlayApp(): React.ReactElement {
     []
   );
   const completeBallReveal = React.useCallback(() => setBallRevealQueue((current) => current.slice(1)), []);
+  const completeSimpleMedia = React.useCallback((instanceId: string) => {
+    setSimpleMedia((current) => current.filter((active) => active.id !== instanceId));
+    sendSocketMessage(socketRef.current, {
+      type: "effect:simple-media-complete",
+      overlayId,
+      instanceId,
+      createdAt: new Date().toISOString()
+    });
+  }, [overlayId]);
 
   React.useEffect(() => {
     let ws: WebSocket | null = null;
@@ -821,12 +831,14 @@ function OverlayApp(): React.ReactElement {
 
     function connect(): void {
       ws = new WebSocket(makeWsUrl(`/ws/overlay/${overlayId}`));
+      socketRef.current = ws;
       ws.addEventListener("open", () => {
         setConnected(true);
         sendOverlayHello(ws, overlayId);
         sendSnapshotRequest(ws, overlayId);
       });
       ws.addEventListener("close", () => {
+        if (socketRef.current === ws) socketRef.current = null;
         setConnected(false);
         if (!closedByCleanup) {
           reconnectTimer = window.setTimeout(connect, 1000);
@@ -838,7 +850,17 @@ function OverlayApp(): React.ReactElement {
     function handleMessage(event: MessageEvent): void {
       const message = JSON.parse(event.data as string) as ServerMessage;
       if (message.type === "effect:clear") {
-        setSimpleMedia([]);
+        setSimpleMedia((current) => {
+          for (const item of current) {
+            sendSocketMessage(socketRef.current, {
+              type: "effect:simple-media-complete",
+              overlayId,
+              instanceId: item.id,
+              createdAt: new Date().toISOString()
+            });
+          }
+          return [];
+        });
       } else if (message.type === "effect:play" && message.effectId === "gift-pile") {
         giftPileRef.current?.receive(message);
       } else if (message.type === "effect:play" && message.effectId === "flash") {
@@ -891,6 +913,7 @@ function OverlayApp(): React.ReactElement {
       closedByCleanup = true;
       window.clearTimeout(reconnectTimer);
       ws?.close();
+      socketRef.current = null;
     };
   }, [overlayId]);
 
@@ -917,7 +940,7 @@ function OverlayApp(): React.ReactElement {
         <SimpleMediaView
           key={item.id}
           item={item}
-          onComplete={() => setSimpleMedia((current) => current.filter((active) => active.id !== item.id))}
+          onComplete={completeSimpleMedia}
         />
       ))}
       {ballRevealQueue[0] ? (
@@ -2243,7 +2266,7 @@ function easeInCubic(value: number): number {
   return t * t * t;
 }
 
-function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onComplete: () => void }): React.ReactElement {
+function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onComplete: (instanceId: string) => void }): React.ReactElement {
   const parameters = item.message.parameters ?? {};
   const visual = item.message.visual;
   const imageEnabled = booleanParam(parameters.imageEnabled, true);
@@ -2265,6 +2288,9 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
   const videoLoop = booleanParam(parameters.videoLoop, false);
   const hasFiniteVideo = videoEnabled && Boolean(item.message.media?.videoUrl) && !videoLoop;
   const endBehavior = stringParam(parameters.videoEndBehavior, "fade-after");
+  const playbackRate = Math.max(0.25, Math.min(4, numberParam(item.message.runtimeData?.simpleMediaPlaybackRate, 1)));
+  const effectiveDurationMs = item.durationMs / playbackRate;
+  const effectiveExitDurationMs = exitDurationMs / playbackRate;
   const [phase, setPhase] = React.useState<"entering" | "playing" | "exiting">("entering");
   const completionStartedRef = React.useRef(false);
   const exitTimerRef = React.useRef<number | null>(null);
@@ -2273,28 +2299,28 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
   const complete = React.useCallback(() => {
     if (completionStartedRef.current) return;
     completionStartedRef.current = true;
-    onComplete();
-  }, [onComplete]);
+    onComplete(item.id);
+  }, [item.id, onComplete]);
 
   const beginExit = React.useCallback(() => {
     if (completionStartedRef.current || exitTimerRef.current !== null) return;
-    if (exitTransition === "none" || exitDurationMs === 0) {
+    if (exitTransition === "none" || effectiveExitDurationMs === 0) {
       complete();
       return;
     }
     setPhase("exiting");
-    exitTimerRef.current = window.setTimeout(complete, exitDurationMs);
-  }, [complete, exitDurationMs, exitTransition]);
+    exitTimerRef.current = window.setTimeout(complete, effectiveExitDurationMs);
+  }, [complete, effectiveExitDurationMs, exitTransition]);
 
   React.useEffect(() => {
     const enterTimer = window.setTimeout(
       () => setPhase((current) => current === "exiting" ? current : "playing"),
-      Math.max(0, numberParam(parameters.enterDurationMs, 250))
+      Math.max(0, numberParam(parameters.enterDurationMs, 250) / playbackRate)
     );
     let exitStartTimer: number | undefined;
     if (!hasFiniteVideo) {
-      const lifetimeMs = Math.max(0, item.durationMs);
-      exitStartTimer = window.setTimeout(beginExit, Math.max(0, lifetimeMs - exitDurationMs));
+      const lifetimeMs = Math.max(0, effectiveDurationMs);
+      exitStartTimer = window.setTimeout(beginExit, Math.max(0, lifetimeMs - effectiveExitDurationMs));
     }
     return () => {
       window.clearTimeout(enterTimer);
@@ -2302,12 +2328,12 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
       if (exitTimerRef.current !== null) window.clearTimeout(exitTimerRef.current);
       if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
     };
-  }, [beginExit, exitDurationMs, hasFiniteVideo, item.durationMs, parameters.enterDurationMs]);
+  }, [beginExit, effectiveDurationMs, effectiveExitDurationMs, hasFiniteVideo, parameters.enterDurationMs, playbackRate]);
 
   function handleVideoTimeUpdate(event: React.SyntheticEvent<HTMLVideoElement>): void {
     if (endBehavior !== "fade-before" || completionStartedRef.current || exitTimerRef.current !== null) return;
     const video = event.currentTarget;
-    if (Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= Math.max(0, video.duration - exitDurationMs / 1000)) {
+    if (Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= Math.max(0, video.duration - effectiveExitDurationMs / 1000 * playbackRate)) {
       beginExit();
     }
   }
@@ -2316,7 +2342,7 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
     if (endBehavior === "immediate" || endBehavior === "fade-before") {
       complete();
     } else if (endBehavior === "hold-then-fade") {
-      holdTimerRef.current = window.setTimeout(beginExit, Math.max(0, numberParam(parameters.videoEndHoldMs, 500)));
+      holdTimerRef.current = window.setTimeout(beginExit, Math.max(0, numberParam(parameters.videoEndHoldMs, 500) / playbackRate));
     } else {
       beginExit();
     }
@@ -2333,8 +2359,8 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
         opacity: visual?.opacity ?? 1,
         zIndex: visual?.zIndex ?? 10,
         "--simple-scale": String(scale),
-        "--simple-enter-ms": `${numberParam(parameters.enterDurationMs, 250)}ms`,
-        "--simple-exit-ms": `${exitDurationMs}ms`,
+        "--simple-enter-ms": `${numberParam(parameters.enterDurationMs, 250) / playbackRate}ms`,
+        "--simple-exit-ms": `${effectiveExitDurationMs}ms`,
         padding: backgroundEnabled ? `${padding}px` : 0,
         borderRadius: backgroundEnabled ? `${borderRadius}px` : 0,
         backgroundColor: backgroundEnabled
@@ -2362,7 +2388,10 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
           onEnded={handleVideoEnded}
           onError={beginExit}
           ref={(video) => {
-            if (video) video.volume = Math.max(0, Math.min(1, numberParam(parameters.videoVolume, 0.8)));
+            if (video) {
+              video.volume = Math.max(0, Math.min(1, numberParam(parameters.videoVolume, 0.8)));
+              video.playbackRate = playbackRate;
+            }
           }}
           style={{ objectFit: fitParam(parameters.videoFit ?? "fill") }}
         />
@@ -2371,6 +2400,7 @@ function SimpleMediaView({ item, onComplete }: { item: SimpleMediaPlayback; onCo
         <audio
           src={item.message.media.audioUrl}
           autoPlay
+          ref={(audio) => { if (audio) audio.playbackRate = playbackRate; }}
           style={{ display: "none" }}
         />
       ) : null}

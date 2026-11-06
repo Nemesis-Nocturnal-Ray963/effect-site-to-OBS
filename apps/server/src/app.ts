@@ -1,5 +1,6 @@
 ﻿import path from "node:path";
 import { createReadStream } from "node:fs";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -42,6 +43,7 @@ import { SoundboardRepository } from "./soundboard/SoundboardRepository.js";
 import { OverlayConfigurationJsonRepository } from "./overlays/OverlayConfigurationJsonRepository.js";
 import { EffectConfigurationJsonRepository } from "./effects/EffectConfigurationJsonRepository.js";
 import { chooseRandomVideoAsset } from "./effects/simpleMediaVideoPool.js";
+import { SimpleMediaQueueService } from "./effects/SimpleMediaQueueService.js";
 import { EffectConfigurationService, effectMessageFromConfiguration } from "./effects/EffectConfigurationService.js";
 import { FallingImageEffectService } from "./effects/builtins/fallingImage.js";
 import { GiftComboTextEffectService } from "./effects/builtins/giftComboText.js";
@@ -95,7 +97,8 @@ function parseInteractionMessage(payload: unknown): ClientInteractionMessage | n
       parsed.type === "interaction:object-delete" ||
       parsed.type === "interaction:clear-overlay" ||
       parsed.type === "runtime:snapshot-request" ||
-      parsed.type === "overlay:hello"
+      parsed.type === "overlay:hello" ||
+      parsed.type === "effect:simple-media-complete"
     ) {
       return parsed as ClientInteractionMessage;
     }
@@ -329,6 +332,10 @@ export async function createApp(options: CreateAppOptions) {
       broadcastStatus();
     }
   });
+  const simpleMediaQueueService = new SimpleMediaQueueService({
+    broadcast: (overlayId, message) => overlayConnectionManager.broadcastToOverlay(overlayId, message)
+  });
+  app.addHook("onClose", async () => simpleMediaQueueService.dispose());
   const runtimeInteractionService = new RuntimeInteractionService(runtimeStore, now, broadcastRuntime);
   fallingImageEffectService = new FallingImageEffectService(rootDir, runtimeInteractionService);
   pitchingMachineBallEffectService = new PitchingMachineBallEffectService(rootDir, runtimeInteractionService);
@@ -367,6 +374,10 @@ export async function createApp(options: CreateAppOptions) {
       await executeBallReveal(configuration, event, triggerType);
       return;
     }
+    if (configuration.effectDefinitionId === "simple-media") {
+      await enqueueSimpleMediaConfiguration(configuration, event, triggerType);
+      return;
+    }
     if (configuration.effectDefinitionId === "gift-pile" && giftPileEffectService) {
       await executeGiftPile(configuration, event);
       return;
@@ -397,6 +408,28 @@ export async function createApp(options: CreateAppOptions) {
         media: await resolveEffectMedia(configuration, event)
       })
     );
+  }
+
+  async function enqueueSimpleMediaConfiguration(
+    configuration: Awaited<ReturnType<EffectConfigurationService["list"]>>[number],
+    event?: NormalizedEvent,
+    triggerType = "manual"
+  ): Promise<{ instanceId: string; waitingCount: number }> {
+    const instanceId = `effect-config-${configuration.id}-${randomUUID()}`;
+    return simpleMediaQueueService.enqueue({
+      instanceId,
+      targetOverlayId: configuration.targetOverlayId,
+      createMessage: async () => {
+        const resolved = await effectConfigurationService.resolveGifts(configuration);
+        return effectMessageFromConfiguration(resolved, {
+          instanceId,
+          createdAt: now(),
+          event,
+          triggerType,
+          media: await resolveEffectMedia(resolved, event)
+        });
+      }
+    });
   }
 
   async function executeGiftPile(configuration: Awaited<ReturnType<EffectConfigurationService["list"]>>[number], event?: NormalizedEvent) {
@@ -461,11 +494,12 @@ export async function createApp(options: CreateAppOptions) {
         videoUrl: asset?.kind === "video" ? asset.contentUrl : undefined,
         audioUrl: asset?.kind === "audio" ? asset.contentUrl : undefined
       };
-      overlayConnectionManager.broadcastToOverlay(targetOverlayId, {
+      const instanceId = `time-trigger-${trigger.id}-${action.id}-${Date.now()}`;
+      const message: EffectPlayMessage = {
         type: "effect:play",
         effectId: "simple-media",
         targetOverlayId,
-        instanceId: `time-trigger-${trigger.id}-${action.id}-${Date.now()}`,
+        instanceId,
         parameters,
         visual: {
           parameters,
@@ -486,6 +520,11 @@ export async function createApp(options: CreateAppOptions) {
         },
         runtimeData: { eventId: event.eventId, eventType: event.type, triggerType: "time-trigger" },
         createdAt: now()
+      };
+      simpleMediaQueueService.enqueue({
+        instanceId,
+        targetOverlayId,
+        createMessage: () => message
       });
       return { actionId: action.id, status: "success", type: action.type, assetId: asset?.id };
     }
@@ -521,6 +560,8 @@ export async function createApp(options: CreateAppOptions) {
       runtimeInteractionService.clear(overlayId, message.scope);
     } else if (message.type === "runtime:snapshot-request") {
       broadcastRuntime(overlayId, runtimeInteractionService.snapshotMessage(overlayId));
+    } else if (message.type === "effect:simple-media-complete") {
+      simpleMediaQueueService.complete(message.instanceId);
     }
   }
 
@@ -891,6 +932,7 @@ export async function createApp(options: CreateAppOptions) {
     executeGiftPile,
     executePuyoGame: (configuration, event) => puyoGameEffectService!.execute(configuration, event),
     executeBallReveal,
+    executeSimpleMedia: enqueueSimpleMediaConfiguration,
     resolveMedia: resolveEffectMedia
   });
   await registerRuntimeRoutes(app, runtimeInteractionService);
@@ -913,7 +955,14 @@ export async function createApp(options: CreateAppOptions) {
     overlays: overlayConnectionManager,
     broadcastToControl,
     now,
-    remoteBaseUrl: () => `http://${firstLanAddress()}:${soundboardRemotePort}`
+    remoteBaseUrl: () => `http://${firstLanAddress()}:${soundboardRemotePort}`,
+    enqueueSimpleMedia: (message) => {
+      simpleMediaQueueService.enqueue({
+        instanceId: message.instanceId,
+        targetOverlayId: message.targetOverlayId ?? 1,
+        createMessage: () => message
+      });
+    }
   });
 
   app.get("/ws/overlay", { websocket: true }, (socket) => {

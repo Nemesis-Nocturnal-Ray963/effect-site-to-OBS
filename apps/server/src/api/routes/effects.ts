@@ -92,6 +92,7 @@ export async function registerEffectRoutes(
     executeGiftPile?: (configuration: EffectConfiguration, event?: NormalizedEvent) => { spawnedObjectCount: number; skipped: boolean } | Promise<{ spawnedObjectCount: number; skipped: boolean }>;
     executePuyoGame?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<{ spawnedObjects: RuntimeEffectObject[]; skipped: boolean; reason?: string }>;
     executeBallReveal?: (configuration: EffectConfiguration, event?: NormalizedEvent, triggerType?: string) => Promise<{ skipped: boolean; reason?: string; instanceId?: string; mediaCount?: number }>;
+    executeSimpleMedia?: (configuration: EffectConfiguration, event?: NormalizedEvent, triggerType?: string) => Promise<{ instanceId: string; waitingCount: number }>;
     resolveMedia?: (configuration: EffectConfiguration, event?: NormalizedEvent) => Promise<ResolvedEffectMedia>;
   }
 ): Promise<void> {
@@ -244,6 +245,16 @@ export async function registerEffectRoutes(
         targetOverlayId: configuration.targetOverlayId,
         instanceId: result.instanceId,
         mediaCount: result.mediaCount
+      };
+    }
+    if (configuration.effectDefinitionId === "simple-media" && options?.executeSimpleMedia) {
+      const result = await options.executeSimpleMedia(configuration, giftTestEvent, giftTestEvent ? "gift" : "manual");
+      return {
+        accepted: true,
+        triggeredEffects: ["simple-media"],
+        targetOverlayId: configuration.targetOverlayId,
+        instanceId: result.instanceId,
+        waitingCount: result.waitingCount
       };
     }
     const message = effectMessageFromConfiguration(configuration, {
