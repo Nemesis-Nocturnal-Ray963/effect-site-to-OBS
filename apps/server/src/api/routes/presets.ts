@@ -133,7 +133,7 @@ export async function registerPresetRoutes(
     if (!parsed.success) return reply.code(400).send({ accepted: false, error: parsed.error.flatten() });
     if (!options?.executeTest) return reply.code(503).send({ accepted: false, error: "Preset testing is unavailable" });
     const event = createPresetGiftTestEvent(parsed.data.gift);
-    const configurations = await effectService.configurationsForPresetTest(preset);
+    const configurations = await effectService.configurationsForPresetTest(preset, event);
     for (const configuration of configurations) await options.executeTest(configuration, event);
     return { accepted: true, testedEffectCount: configurations.length };
   });

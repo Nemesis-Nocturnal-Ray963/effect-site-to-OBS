@@ -165,6 +165,15 @@ export async function registerEffectRoutes(
     const parsedTest = effectTestSchema.safeParse(request.body ?? {});
     if (!parsedTest.success) return reply.code(400).send({ accepted: false, error: parsedTest.error.flatten() });
     const giftTestEvent = parsedTest.data.gift ? createSelectedGiftTestEvent(parsedTest.data.gift) : undefined;
+    if (giftTestEvent && !(await service.matchesEvent(configuration, giftTestEvent))) {
+      return {
+        accepted: true,
+        skipped: true,
+        triggeredEffects: [],
+        targetOverlayId: configuration.targetOverlayId,
+        reason: "The selected gift does not match this effect trigger"
+      };
+    }
     if (configuration.effectDefinitionId === "falling-image" && options?.executeFallingImage) {
       const result = await options.executeFallingImage(configuration, giftTestEvent);
       if (result.skipped) {

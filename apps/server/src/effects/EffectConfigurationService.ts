@@ -172,10 +172,10 @@ export class EffectConfigurationService {
     return nextPresetConfigurations;
   }
 
-  async configurationsForPresetTest(preset: EffectPreset): Promise<EffectConfiguration[]> {
+  async configurationsForPresetTest(preset: EffectPreset, event?: NormalizedEvent): Promise<EffectConfiguration[]> {
     const configurations = await this.list();
     const timestamp = this.now();
-    return preset.slots
+    const candidates = preset.slots
       .filter((slot) => slot.enabled && slot.effectDefinitionId)
       .map((slot) => {
         const libraryConfiguration = configurations.find(
@@ -189,6 +189,16 @@ export class EffectConfigurationService {
           enabled: true
         };
       });
+    if (!event) return candidates;
+    const gifts = await this.listGifts();
+    return candidates.filter((configuration) =>
+      matchesTrigger(resolveEffectGifts(configuration, gifts).trigger, event, configuration.id, new Set())
+    );
+  }
+
+  async matchesEvent(configuration: EffectConfiguration, event: NormalizedEvent): Promise<boolean> {
+    const resolved = resolveEffectGifts(configuration, await this.listGifts());
+    return matchesTrigger(resolved.trigger, event, resolved.id, new Set());
   }
 
   async removePresetConfigurations(presetId: string): Promise<void> {

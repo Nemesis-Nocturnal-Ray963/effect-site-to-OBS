@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { NormalizedEvent } from "@obs-effect/shared-types";
+import type { EffectPreset, NormalizedEvent } from "@obs-effect/shared-types";
 import { GiftCatalogJsonRepository } from "./GiftCatalogJsonRepository.js";
 import { GiftCatalogService } from "./GiftCatalogService.js";
 import { EffectConfigurationJsonRepository } from "../effects/EffectConfigurationJsonRepository.js";
@@ -56,6 +56,34 @@ describe("gift identity matching", () => {
     expect(await effects.match(event({ giftName: gift.name }))).toHaveLength(0);
     expect(await effects.match({ ...event({ giftName: "Rainbow Gift" }), platform: "youtube" })).toHaveLength(0);
     expect(await effects.match({ ...event({ giftName: "Rainbow Gift" }), type: "comment" })).toHaveLength(0);
+  });
+
+  it("filters individual and preset gift tests through the configured gift trigger", async () => {
+    const { effects, gift } = await setup();
+    const matching = await effects.create({ effectDefinitionId: "simple-media", trigger: {
+      mode: "any", conditions: [{ type: "gift-specific", platform: "tiktok", platformGiftId: gift.platformGiftId, triggerOn: "gift" }]
+    } });
+    const other = await effects.create({ effectDefinitionId: "simple-media", trigger: {
+      mode: "any", conditions: [{ type: "gift-specific", platform: "tiktok", platformGiftId: "other-gift", triggerOn: "gift" }]
+    } });
+    const matchingEvent = event({ giftId: gift.platformGiftId });
+    expect(await effects.matchesEvent(matching, matchingEvent)).toBe(true);
+    expect(await effects.matchesEvent(other, matchingEvent)).toBe(false);
+
+    const preset: EffectPreset = {
+      id: "preset-test",
+      name: "Gift test preset",
+      enabled: true,
+      slots: [
+        { ...matching, id: "matching-slot" },
+        { ...other, id: "other-slot" }
+      ],
+      createdAt: now(),
+      updatedAt: now()
+    };
+    const selected = await effects.configurationsForPresetTest(preset, matchingEvent);
+    expect(selected).toHaveLength(1);
+    expect(selected[0]?.presetSlotId).toBe("matching-slot");
   });
 
   it("preserves display and matching names independently across updates and reloads", async () => {
