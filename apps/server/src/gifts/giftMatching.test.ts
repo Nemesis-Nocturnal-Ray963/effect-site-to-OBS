@@ -86,6 +86,32 @@ describe("gift identity matching", () => {
     expect(selected[0]?.presetSlotId).toBe("matching-slot");
   });
 
+  it("queues Simple Media for each gift streak update without replaying the streak end", async () => {
+    const { effects, gift } = await setup();
+    const configuration = await effects.create({
+      effectDefinitionId: "simple-media",
+      presetId: "preset",
+      trigger: {
+        mode: "any",
+        conditions: [{
+          type: "gift-specific",
+          platform: "tiktok",
+          platformGiftId: gift.platformGiftId,
+          triggerOn: "streak-end"
+        }]
+      }
+    });
+    const received = event({ giftId: gift.platformGiftId, repeatCount: 1 });
+    const streakStart = { ...received, eventId: "streak-start", type: "gift-streak-start" as const };
+    const streakUpdate = { ...received, eventId: "streak-update", type: "gift-streak-update" as const, data: { ...received.data, repeatCount: 2 } };
+    const streakEnd = { ...received, eventId: "streak-end", type: "gift-streak-end" as const, data: { ...received.data, repeatCount: 2 } };
+
+    expect((await effects.match(received)).map((item) => item.id)).toContain(configuration.id);
+    expect((await effects.match(streakStart)).map((item) => item.id)).toContain(configuration.id);
+    expect((await effects.match(streakUpdate)).map((item) => item.id)).toContain(configuration.id);
+    expect((await effects.match(streakEnd)).map((item) => item.id)).not.toContain(configuration.id);
+  });
+
   it("preserves display and matching names independently across updates and reloads", async () => {
     const { root, catalog, gift } = await setup();
     await catalog.update(gift.id, { name: "New display name" });

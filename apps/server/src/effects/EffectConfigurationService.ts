@@ -198,7 +198,8 @@ export class EffectConfigurationService {
 
   async matchesEvent(configuration: EffectConfiguration, event: NormalizedEvent): Promise<boolean> {
     const resolved = resolveEffectGifts(configuration, await this.listGifts());
-    return matchesTrigger(resolved.trigger, event, resolved.id, new Set());
+    const runtimeMatch = runtimeGiftMatch(resolved, event);
+    return runtimeMatch !== null && matchesTrigger(runtimeMatch.trigger, runtimeMatch.event, resolved.id, new Set());
   }
 
   async removePresetConfigurations(presetId: string): Promise<void> {
@@ -212,12 +213,16 @@ export class EffectConfigurationService {
   async match(event: NormalizedEvent): Promise<EffectConfiguration[]> {
     const gifts = await this.listGifts();
     const configurations = (await this.list()).map((configuration) => resolveEffectGifts(configuration, gifts));
-    return configurations.filter((configuration) =>
-      configuration.enabled && configuration.presetId && matchesTrigger(configuration.trigger,
-        configuration.effectDefinitionId === "gift-pile" && (event.type === "gift-streak-start" || event.type === "gift-streak-update")
-          ? { ...event, type: "gift" } : event,
-        configuration.id, this.followedUserTriggers)
-    );
+    return configurations.filter((configuration) => {
+      if (!configuration.enabled || !configuration.presetId) return false;
+      const runtimeMatch = runtimeGiftMatch(configuration, event);
+      return runtimeMatch !== null && matchesTrigger(
+        runtimeMatch.trigger,
+        runtimeMatch.event,
+        configuration.id,
+        this.followedUserTriggers
+      );
+    });
   }
 
   private resolveDefinition(effectDefinitionId: string | undefined): EffectDefinition {
@@ -369,6 +374,32 @@ function matchesTrigger(trigger: EffectTriggerGroup, event: NormalizedEvent, con
     }
   }
   return matched;
+}
+
+function runtimeGiftMatch(
+  configuration: EffectConfiguration,
+  event: NormalizedEvent
+): { trigger: EffectTriggerGroup; event: NormalizedEvent } | null {
+  const isStreakProgress = event.type === "gift-streak-start" || event.type === "gift-streak-update";
+  if (configuration.effectDefinitionId === "gift-pile" && isStreakProgress) {
+    return { trigger: configuration.trigger, event: { ...event, type: "gift" } };
+  }
+  if (configuration.effectDefinitionId !== "simple-media") {
+    return { trigger: configuration.trigger, event };
+  }
+  if (event.type === "gift-streak-end") return null;
+  if (event.type !== "gift" && !isStreakProgress) return { trigger: configuration.trigger, event };
+  return {
+    event: isStreakProgress ? { ...event, type: "gift" } : event,
+    trigger: {
+      ...configuration.trigger,
+      conditions: configuration.trigger.conditions.map((condition) =>
+        condition.type === "gift-any" || condition.type === "gift-specific" || condition.type === "gift-value"
+          ? { ...condition, triggerOn: "gift" }
+          : condition
+      )
+    }
+  };
 }
 
 function matchesCondition(condition: EffectTriggerCondition, event: NormalizedEvent, configurationId: string, followedUserTriggers: Set<string>): boolean {
