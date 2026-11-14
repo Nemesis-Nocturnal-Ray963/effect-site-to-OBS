@@ -1,6 +1,6 @@
 import React from "react";
 import type { EffectPlayMessage } from "@obs-effect/shared-types";
-import { alphaCollisionProfile, GiftPileEngine, GIFT_FADE_MS } from "./giftPileEngine";
+import { alphaCollisionProfile, GiftPileEngine } from "./giftPileEngine";
 import fallbackGiftUrl from "./assets/gift-present.svg";
 
 export interface GiftPileHandle {
@@ -34,7 +34,10 @@ export const GiftPileLayer = React.forwardRef<GiftPileHandle>(function GiftPileL
           number(params.objectSizePx, 44),
           number(params.maxObjects, 1000),
           Date.now(),
-          message.visual?.opacity ?? 1
+          message.visual?.opacity ?? 1,
+          number(message.playback?.durationMs, 60000),
+          number(params.fadeDurationMs, 1200),
+          number(params.spawnRatePerSecond, 60)
         );
         if (canvasRef.current)
           canvasRef.current.style.zIndex = String(message.visual?.zIndex ?? 10);
@@ -108,7 +111,9 @@ export const GiftPileLayer = React.forwardRef<GiftPileHandle>(function GiftPileL
         context!.save();
         context!.globalAlpha =
           body.opacity *
-          Math.max(0, Math.min(1, (body.expiresAt + GIFT_FADE_MS - now) / GIFT_FADE_MS));
+          (body.fadeDurationMs <= 0
+            ? Number(body.expiresAt > now)
+            : Math.max(0, Math.min(1, (body.expiresAt + body.fadeDurationMs - now) / body.fadeDurationMs)));
         context!.translate(body.x, body.y);
         context!.rotate(body.angle);
         context!.drawImage(

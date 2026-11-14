@@ -64,6 +64,13 @@ const giftComboSoundParameterKeys = new Set([
   "maxPlaybackRate",
   "pitchCurveStrength"
 ]);
+const chromaErasureCustomParameterKeys = new Set([
+  "inverted",
+  "countdownSeconds",
+  "giftRecoverySeconds",
+  "giftErasePercent",
+  "recoveryPulseEnabled"
+]);
 
 export function PresetsPage(): React.ReactElement {
   const { t } = useI18n();
@@ -449,6 +456,7 @@ function SlotEditor(props: {
   const isBallReveal = props.slot.effectDefinitionId === "ball-reveal";
   const isGiftComboText = props.slot.effectDefinitionId === "gift-combo-text";
   const isGiftPile = props.slot.effectDefinitionId === "gift-pile";
+  const isChromaErasure = props.slot.effectDefinitionId === "chroma-erasure";
   const isSimpleMedia = props.slot.effectDefinitionId === "simple-media";
   const hasMediaSettings = Boolean(definition?.supportsImage || definition?.supportsVideo || definition?.supportsAudio || isBallReveal || isPitchingMachineBall);
   const selectedOverlay = props.overlays.find((overlay) => overlay.overlayId === props.slot.targetOverlayId);
@@ -696,12 +704,13 @@ function SlotEditor(props: {
 
       <PresetSettingsSection index="3" title={t("Playback and layout")} description={t("Control timing, layering, size, and placement.")}>
         <NumberField
-          label={t("Duration ms")}
-          value={props.slot.playback.durationMs}
-          min={50}
-          step={50}
+          label={isGiftPile ? t("Gift display time (seconds)") : t("Duration ms")}
+          value={isGiftPile ? props.slot.playback.durationMs / 1000 : props.slot.playback.durationMs}
+          min={isGiftPile ? 1 : 50}
+          max={isGiftPile ? 600 : undefined}
+          step={isGiftPile ? 1 : 50}
           disabled={isSimpleMedia && (Boolean(props.slot.media.videoAssetId) || Boolean(String(props.slot.visual.parameters.videoAssetIdsCsv ?? "").trim())) && props.slot.visual.parameters.videoEnabled === true && props.slot.visual.parameters.videoLoop !== true}
-          onChange={(value) => props.onPatch({ playback: { durationMs: value } })}
+          onChange={(value) => props.onPatch({ playback: { durationMs: isGiftPile ? value * 1000 : value } })}
         />
         <NumberField
           label={t("Start delay ms")}
@@ -972,6 +981,32 @@ function SlotEditor(props: {
               />
             </>
           ) : null}
+          {isChromaErasure ? (
+            <div className="form-grid preset-parameter-grid">
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={props.slot.visual.parameters.inverted === true}
+                  onChange={(event) => void patchParameter("inverted", event.target.checked)}
+                />
+                {t("Invert")}
+              </label>
+              {props.slot.visual.parameters.inverted === true ? (
+                <>
+                  <NumberField label={t("Gift erasure per trigger (%)")} value={numberParameter(props.slot.visual.parameters.giftErasePercent, 10)} min={0.1} max={100} step={0.1} onChange={(value) => patchParameter("giftErasePercent", value)} />
+                  <label className="checkbox-row"><input type="checkbox" checked={props.slot.visual.parameters.recoveryPulseEnabled !== false} onChange={(event) => void patchParameter("recoveryPulseEnabled", event.target.checked)} />{t("Gift erasure pulse")}</label>
+                  <small className="preset-full-width">{t("In inverted mode, time does not advance erasure. Each matching gift advances it by the configured percentage.")}</small>
+                </>
+              ) : (
+                <>
+                  <NumberField label={t("Time to complete (seconds)")} value={numberParameter(props.slot.visual.parameters.countdownSeconds, 180)} min={10} max={3600} step={5} onChange={(value) => patchParameter("countdownSeconds", value)} />
+                  <NumberField label={t("Gift recovery (seconds)")} value={numberParameter(props.slot.visual.parameters.giftRecoverySeconds, 15)} min={1} max={600} step={1} onChange={(value) => patchParameter("giftRecoverySeconds", value)} />
+                  <label className="checkbox-row"><input type="checkbox" checked={props.slot.visual.parameters.recoveryPulseEnabled !== false} onChange={(event) => void patchParameter("recoveryPulseEnabled", event.target.checked)} />{t("Gift recovery pulse")}</label>
+                  <small className="preset-full-width">{t("Press Test once to start. Each matching gift rewinds the erasure timer.")}</small>
+                </>
+              )}
+            </div>
+          ) : null}
           <div className="form-grid preset-parameter-grid">
             {definition.parameterSchema.fields
               .filter((field) => !isPitchingMachineBall || !pitchingCustomParameterKeys.has(field.key))
@@ -979,6 +1014,7 @@ function SlotEditor(props: {
               .filter((field) => !isGiftComboText || !giftComboSoundParameterKeys.has(field.key))
               .filter((field) => !isGiftPile || field.key !== "giftSizeOverridesJson")
               .filter((field) => !isGiftPile || field.key !== "coinImageRulesJson")
+              .filter((field) => !isChromaErasure || !chromaErasureCustomParameterKeys.has(field.key))
               .filter((field) => !isSimpleMedia || !simpleMediaCustomParameterKeys.has(field.key))
               .map((field) => {
                 const groupLabel = isSimpleMedia ? simpleMediaParameterGroup(field.key) : null;
@@ -1280,10 +1316,10 @@ function normalizePresetEffectTrigger(effectDefinitionId: string, trigger: Effec
   if (trigger && hasTikTokGiftCondition) return trigger;
   return {
     mode: "any",
-    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
+    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile", "chroma-erasure"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
   };
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string | undefined): boolean {
-  return !!effectDefinitionId && ["flash", "simple-media", "ball-reveal", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
+  return !!effectDefinitionId && ["flash", "simple-media", "ball-reveal", "chroma-erasure", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
 }

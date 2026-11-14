@@ -19,7 +19,7 @@ export const giftPileEffectDefinition: EffectDefinition = {
   supportsVideo: false,
   supportsAudio: false,
   supportsText: false,
-  defaultDurationMs: 900000,
+  defaultDurationMs: 60000,
   defaultOverlayId: 1,
   parameterSchema: {
     fields: [
@@ -38,6 +38,24 @@ export const giftPileEffectDefinition: EffectDefinition = {
         defaultValue: 1000,
         min: 1,
         max: 2000,
+        step: 1
+      },
+      {
+        key: "fadeDurationMs",
+        label: "Gift fade duration (ms)",
+        type: "number",
+        defaultValue: 1200,
+        min: 0,
+        max: 10000,
+        step: 100
+      },
+      {
+        key: "spawnRatePerSecond",
+        label: "Gift spawn rate (per second)",
+        type: "number",
+        defaultValue: 60,
+        min: 1,
+        max: 240,
         step: 1
       },
       {
@@ -84,7 +102,8 @@ export class GiftPileEffectService {
       createdAt: new Date().toISOString(),
       parameters: { ...configuration.visual.parameters, action: "add", quantity, objectSizePx },
       media: { imageUrl },
-      visual: configuration.visual
+      visual: configuration.visual,
+      playback: configuration.playback
     });
     return { spawnedObjectCount: quantity, skipped: false };
   }

@@ -6,6 +6,7 @@ import { pitchingMachineBallEffectDefinition } from "./builtins/pitchingMachineB
 import { puyoGameEffectDefinition } from "./builtins/puyoGame.js";
 import { simpleMediaEffectDefinition } from "./builtins/simpleMedia.js";
 import { ballRevealEffectDefinition } from "./builtins/ballReveal.js";
+import { chromaErasureEffectDefinition } from "./builtins/chromaErasure.js";
 
 import { giftPileEffectDefinition } from "./builtins/giftPile.js";
 
@@ -14,6 +15,7 @@ export const effectDefinitions: EffectDefinition[] = [
   fallingImageEffectDefinition,
   simpleMediaEffectDefinition,
   ballRevealEffectDefinition,
+  chromaErasureEffectDefinition,
   pitchingMachineBallEffectDefinition,
   puyoGameEffectDefinition,
   giftComboTextEffectDefinition,

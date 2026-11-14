@@ -20,6 +20,7 @@ import {
   type PuyoPair
 } from "./puyoEngine";
 import { GiftPileLayer, type GiftPileHandle } from "./GiftPileLayer";
+import { ChromaErasureLayer, type ChromaErasurePlayback } from "./ChromaErasureLayer";
 import defaultBallRevealUrl from "./assets/ball-reveal-default.png";
 import "./styles.css";
 
@@ -803,6 +804,7 @@ function OverlayApp(): React.ReactElement {
   const [flashes, setFlashes] = React.useState<Flash[]>([]);
   const [simpleMedia, setSimpleMedia] = React.useState<SimpleMediaPlayback[]>([]);
   const [ballRevealQueue, setBallRevealQueue] = React.useState<BallRevealPlayback[]>([]);
+  const [chromaErasures, setChromaErasures] = React.useState<ChromaErasurePlayback[]>([]);
   const shuffleDecksRef = React.useRef(new Map<string, { signature: string; deck: string[]; lastId?: string }>());
   const [snapshot, setSnapshot] = React.useState<RuntimeOverlaySnapshot | null>(null);
   const [connected, setConnected] = React.useState(false);
@@ -859,6 +861,7 @@ function OverlayApp(): React.ReactElement {
     function handleMessage(event: MessageEvent): void {
       const message = JSON.parse(event.data as string) as ServerMessage;
       if (message.type === "effect:clear") {
+        setChromaErasures([]);
         setSimpleMedia((current) => {
           for (const item of current) {
             sendSocketMessage(socketRef.current, {
@@ -899,6 +902,21 @@ function OverlayApp(): React.ReactElement {
         const item: BallRevealPlayback = { id: play.instanceId, message: play };
         const queueLimit = Math.max(1, Math.round(numberParam(play.parameters?.queueLimit, 20)));
         setBallRevealQueue((current) => current.length >= queueLimit ? current : [...current, item]);
+      } else if (message.type === "effect:play" && message.effectId === "chroma-erasure") {
+        const play = message as EffectPlayMessage;
+        // This effect is intentionally singleton per overlay. A manual test uses the
+        // library configuration id, while live gifts use the active preset copy id;
+        // sharing one key lets those gift messages recover the already-running timer.
+        const key = "chroma-erasure";
+        setChromaErasures((current) => {
+          const existing = current.find((item) => item.key === key);
+          if (!existing) return [...current, { key, message: play, revision: 0 }];
+          return current.map((item) => item.key === key ? { ...item, message: play, revision: item.revision + 1 } : item);
+        });
+      } else if (message.type === "effect:stop" && (message.effectId === "chroma-erasure" || message.instanceId)) {
+        setChromaErasures((current) => current.filter((item) =>
+          message.effectId === "chroma-erasure" ? false : item.message.instanceId !== message.instanceId
+        ));
       } else if (message.type === "runtime:snapshot" && message.snapshot.overlayId === overlayId) {
         setSnapshot(message.snapshot);
       } else if (message.type === "runtime:object-created" && message.object.overlayId === overlayId) {
@@ -962,6 +980,7 @@ function OverlayApp(): React.ReactElement {
           onComplete={completeBallReveal}
         />
       ) : null}
+      {chromaErasures.map((item) => <ChromaErasureLayer key={item.key} item={item} />)}
       <GiftPileLayer ref={giftPileRef} />
       <FallingImagePhysicsLayer objects={(snapshot?.objects ?? []).filter(isRenderableFallingImage)} />
       <PitchingMachineLayer objects={(snapshot?.objects ?? []).filter(isRenderablePitchingObject)} />

@@ -23,16 +23,29 @@ describe("gift pile", () => {
     expect(engine.bodies[9]?.imageUrl).toBe("heart");
   });
 
-  it("adds 15 minutes only to living bodies with at most 15 minutes left", () => {
+  it("adds the configured lifetime only to living bodies with at most that lifetime left", () => {
     const engine = createEngine();
     engine.add(1, "rose", 44, 1000, 0);
     engine.step(1 / 60, 1080, 1920, 0);
-    engine.add(1, "heart", 44, 1000, 5 * 60000);
+    engine.add(1, "heart", 44, 1000, LIFE / 3);
     expect(engine.bodies[0]?.expiresAt).toBe(2 * LIFE);
-    engine.add(1, "heart", 44, 1000, 6 * 60000);
+    engine.add(1, "heart", 44, 1000, 2 * LIFE / 3);
     expect(engine.bodies[0]?.expiresAt).toBe(2 * LIFE);
     engine.add(1, "heart", 44, 1000, LIFE);
     expect(engine.bodies[0]?.expiresAt).toBe(3 * LIFE);
+  });
+
+  it("uses configurable lifetime, fade duration, and spawn rate", () => {
+    const engine = createEngine();
+    engine.add(2, "rose", 44, 1000, 0, 1, 3000, 500, 1);
+    engine.step(1 / 30, 1080, 1920, 0);
+    expect(engine.bodies).toHaveLength(0);
+    for (let index = 0; index < 30; index++) engine.step(1 / 30, 1080, 1920, index * 1000 / 30);
+    expect(engine.bodies).toHaveLength(1);
+    expect(engine.bodies[0]?.expiresAt).toBeCloseTo(3966.67, 1);
+    expect(engine.bodies[0]?.fadeDurationMs).toBe(500);
+    engine.step(0, 1080, 1920, 4500);
+    expect(engine.bodies).toHaveLength(0);
   });
 
   it("keeps gifts on a small screen until the configured object limit is reached", () => {

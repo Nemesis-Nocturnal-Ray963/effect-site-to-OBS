@@ -52,7 +52,7 @@ function newCondition(type: EffectTriggerCondition["type"]): EffectTriggerCondit
 }
 
 function defaultTikTokTrigger(effectDefinitionId: string): EffectConfiguration["trigger"] | undefined {
-  if (["gift-combo-text", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
+  if (["gift-combo-text", "gift-pile", "chroma-erasure"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
   if (["flash", "simple-media", "ball-reveal", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
   return undefined;
 }
@@ -331,6 +331,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
   const isPitchingMachineBall = configuration.effectDefinitionId === "pitching-machine-ball";
   const isGiftComboText = configuration.effectDefinitionId === "gift-combo-text";
   const isGiftPile = configuration.effectDefinitionId === "gift-pile";
+  const isChromaErasure = configuration.effectDefinitionId === "chroma-erasure";
   const selectedOverlay = props.overlays.find((overlay) => overlay.overlayId === configuration.targetOverlayId);
 
   React.useEffect(() => {
@@ -519,7 +520,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
           {t("Duration")}
           <input
             type="number"
-            disabled={isGiftPile || (isSimpleMedia && (Boolean(configuration.media.videoAssetId) || selectedRandomVideoIds().length > 0) && parameterBoolean("videoEnabled", false) && !parameterBoolean("videoLoop", false))}
+            disabled={isGiftPile || isChromaErasure || (isSimpleMedia && (Boolean(configuration.media.videoAssetId) || selectedRandomVideoIds().length > 0) && parameterBoolean("videoEnabled", false) && !parameterBoolean("videoLoop", false))}
             min="50"
             step="50"
             value={configuration.playback.durationMs}
@@ -528,6 +529,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
           {isSimpleMedia && (Boolean(configuration.media.videoAssetId) || selectedRandomVideoIds().length > 0) && parameterBoolean("videoEnabled", false) && !parameterBoolean("videoLoop", false)
             ? <small>{t("A non-looping video plays until the video itself ends.")}</small>
             : null}
+          {isChromaErasure ? <small>{t("Use Time to complete in Effect settings for this effect.")}</small> : null}
         </label>
         <label>
           {t("Cooldown")}
@@ -542,6 +544,31 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
       </SettingsSection>
 
       <SettingsSection index="4" title={t("Effect settings")} description={t("Configure media, appearance, motion, and effect-specific behavior.")}>
+        {isChromaErasure ? (
+          <>
+            <label className="checkbox-row"><input type="checkbox" checked={parameterBoolean("inverted", false)} onChange={(event) => void patchParameter("inverted", event.target.checked)} />{t("Invert")}</label>
+            <label>{t("Chroma key color")}<input type="color" value={parameterString("chromaColor", "#00ff00")} onChange={(event) => void patchParameter("chromaColor", event.target.value)} /></label>
+            {parameterBoolean("inverted", false) ? (
+              <>
+                <NumberField label={t("Gift erasure per trigger (%)")} value={parameterNumber("giftErasePercent", 10)} min={0.1} max={100} step={0.1} onChange={(value) => patchParameter("giftErasePercent", value)} />
+                <label className="checkbox-row"><input type="checkbox" checked={parameterBoolean("recoveryPulseEnabled", true)} onChange={(event) => void patchParameter("recoveryPulseEnabled", event.target.checked)} />{t("Gift erasure pulse")}</label>
+                <small>{t("In inverted mode, time does not advance erasure. Each matching gift advances it by the configured percentage.")}</small>
+              </>
+            ) : (
+              <>
+                <NumberField label={t("Time to complete (seconds)")} value={parameterNumber("countdownSeconds", 180)} min={10} max={3600} step={5} onChange={(value) => patchParameter("countdownSeconds", value)} />
+                <NumberField label={t("Gift recovery (seconds)")} value={parameterNumber("giftRecoverySeconds", 15)} min={1} max={600} onChange={(value) => patchParameter("giftRecoverySeconds", value)} />
+                <label className="checkbox-row"><input type="checkbox" checked={parameterBoolean("recoveryPulseEnabled", true)} onChange={(event) => void patchParameter("recoveryPulseEnabled", event.target.checked)} />{t("Gift recovery pulse")}</label>
+                <small>{t("Press Test once to start. Each matching gift rewinds the erasure timer.")}</small>
+              </>
+            )}
+            <NumberField label={t("Line thickness (px)")} value={parameterNumber("lineThicknessPx", 20)} min={2} max={120} onChange={(value) => patchParameter("lineThicknessPx", value)} />
+            <NumberField label={t("Initial line gap (px)")} value={parameterNumber("lineGapPx", 8)} min={0} max={80} onChange={(value) => patchParameter("lineGapPx", value)} />
+            <NumberField label={t("Organic jitter (px)")} value={parameterNumber("lineJitterPx", 9)} min={0} max={40} onChange={(value) => patchParameter("lineJitterPx", value)} />
+            <NumberField label={t("Final sealing phase (%)")} value={parameterNumber("finalFloodPercent", 18)} min={5} max={50} onChange={(value) => patchParameter("finalFloodPercent", value)} />
+            <label>{t("Line direction")}<select value={parameterString("direction", "alternating")} onChange={(event) => void patchParameter("direction", event.target.value)}><option value="alternating">{t("Alternating left / right")}</option><option value="left-to-right">{t("Left to right")}</option><option value="right-to-left">{t("Right to left")}</option></select></label>
+          </>
+        ) : null}
         {isSimpleMedia ? (
           <>
             <div className="settings-subsection-title">

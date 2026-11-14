@@ -1,4 +1,4 @@
-export const GIFT_LIFETIME_MS = 15 * 60 * 1000;
+export const GIFT_LIFETIME_MS = 60 * 1000;
 export const GIFT_FADE_MS = 1200;
 
 export interface PileBody {
@@ -12,6 +12,7 @@ export interface PileBody {
   spin: number;
   imageUrl: string;
   expiresAt: number;
+  fadeDurationMs: number;
   opacity: number;
   collisionProfile: readonly number[];
 }
@@ -20,6 +21,9 @@ interface Batch {
   imageUrl: string;
   size: number;
   opacity: number;
+  lifetimeMs: number;
+  fadeDurationMs: number;
+  spawnRatePerSecond: number;
 }
 
 const COLLISION_PROFILE_STEPS = 64;
@@ -40,19 +44,26 @@ export class GiftPileEngine {
     size: number,
     maxObjects: number,
     now: number,
-    opacity = 1
+    opacity = 1,
+    lifetimeMs = GIFT_LIFETIME_MS,
+    fadeDurationMs = GIFT_FADE_MS,
+    spawnRatePerSecond = 60
   ): void {
     if (!Number.isFinite(count) || count < 1) return;
     this.maxObjects = Math.round(clamp(maxObjects, 1, 2000));
     this.bodies = this.bodies.filter((body) => body.expiresAt > now);
+    lifetimeMs = Math.round(clamp(lifetimeMs, 1000, 600000));
     for (const body of this.bodies) {
-      if (body.expiresAt - now <= GIFT_LIFETIME_MS) body.expiresAt += GIFT_LIFETIME_MS;
+      if (body.expiresAt - now <= lifetimeMs) body.expiresAt += lifetimeMs;
     }
     this.batches.push({
       count: Math.floor(count),
       imageUrl,
       size: minimum(size, 16),
-      opacity: clamp(opacity, 0, 1)
+      opacity: clamp(opacity, 0, 1),
+      lifetimeMs,
+      fadeDurationMs: Math.round(clamp(fadeDurationMs, 0, 10000)),
+      spawnRatePerSecond: clamp(spawnRatePerSecond, 1, 240)
     });
     this.trim();
   }
@@ -76,8 +87,9 @@ export class GiftPileEngine {
 
   step(dt: number, width: number, height: number, now: number): void {
     dt = clamp(dt, 0, 1 / 30);
-    this.bodies = this.bodies.filter((body) => body.expiresAt + GIFT_FADE_MS > now);
-    this.spawnBudget = Math.min(4, this.spawnBudget + dt * 60);
+    this.bodies = this.bodies.filter((body) => body.expiresAt + body.fadeDurationMs > now);
+    const spawnRate = this.batches[0]?.spawnRatePerSecond ?? 60;
+    this.spawnBudget = Math.min(Math.max(4, spawnRate / 15), this.spawnBudget + dt * spawnRate);
     while (this.batches.length && this.spawnBudget >= 1) {
       const batch = this.batches[0]!;
       const radius = Math.min(batch.size / 2, width / 2);
@@ -91,7 +103,8 @@ export class GiftPileEngine {
         angle: this.random() * Math.PI * 2,
         spin: (this.random() - 0.5) * 2,
         imageUrl: batch.imageUrl,
-        expiresAt: now + GIFT_LIFETIME_MS,
+        expiresAt: now + batch.lifetimeMs,
+        fadeDurationMs: batch.fadeDurationMs,
         opacity: batch.opacity,
         collisionProfile: this.collisionProfiles.get(batch.imageUrl) ?? FULL_COLLISION_PROFILE
       });

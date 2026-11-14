@@ -354,13 +354,13 @@ function presetRuntimeTrigger(effectDefinitionId: string, trigger: EffectTrigger
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string): boolean {
-  return ["flash", "simple-media", "ball-reveal", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
+  return ["flash", "simple-media", "ball-reveal", "chroma-erasure", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
 }
 
 function defaultTikTokGiftTrigger(effectDefinitionId: string): EffectTriggerGroup {
   return {
     mode: "any",
-    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
+    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile", "chroma-erasure"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
   };
 }
 
