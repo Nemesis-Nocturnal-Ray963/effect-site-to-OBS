@@ -52,7 +52,7 @@ function newCondition(type: EffectTriggerCondition["type"]): EffectTriggerCondit
 }
 
 function defaultTikTokTrigger(effectDefinitionId: string): EffectConfiguration["trigger"] | undefined {
-  if (["gift-combo-text", "gift-pile", "chroma-erasure"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
+  if (["gift-combo-text", "gift-pile", "tethered-gift", "chroma-erasure"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "gift" }] };
   if (["flash", "simple-media", "ball-reveal", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId)) return { mode: "any", conditions: [{ type: "gift-any", triggerOn: "streak-end" }] };
   return undefined;
 }
@@ -331,6 +331,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
   const isPitchingMachineBall = configuration.effectDefinitionId === "pitching-machine-ball";
   const isGiftComboText = configuration.effectDefinitionId === "gift-combo-text";
   const isGiftPile = configuration.effectDefinitionId === "gift-pile";
+  const isTetheredGift = configuration.effectDefinitionId === "tethered-gift";
   const isChromaErasure = configuration.effectDefinitionId === "chroma-erasure";
   const selectedOverlay = props.overlays.find((overlay) => overlay.overlayId === configuration.targetOverlayId);
 
@@ -503,7 +504,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             {t("Once per user per live")}
           </label>
         ) : null}
-        {"triggerOn" in condition && !isGiftPile ? (
+        {"triggerOn" in condition && !isGiftPile && !isTetheredGift ? (
           <label>
             {t("Gift timing")}
             <select value={condition.triggerOn} onChange={(event) => void patchCondition({ ...condition, triggerOn: event.target.value as "gift" })}>
@@ -517,14 +518,14 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
 
       <SettingsSection index="3" title={t("Timing")} description={t("Control duration and repeated playback.")}>
         <label>
-          {t("Duration")}
+          {isTetheredGift ? t("Display time (seconds)") : t("Duration")}
           <input
             type="number"
             disabled={isGiftPile || isChromaErasure || (isSimpleMedia && (Boolean(configuration.media.videoAssetId) || selectedRandomVideoIds().length > 0) && parameterBoolean("videoEnabled", false) && !parameterBoolean("videoLoop", false))}
-            min="50"
-            step="50"
-            value={configuration.playback.durationMs}
-            onChange={(event) => void props.onPatch({ playback: { durationMs: Number(event.target.value) } })}
+            min={isTetheredGift ? 0.5 : 50}
+            step={isTetheredGift ? 0.5 : 50}
+            value={isTetheredGift ? configuration.playback.durationMs / 1000 : configuration.playback.durationMs}
+            onChange={(event) => void props.onPatch({ playback: { durationMs: Number(event.target.value) * (isTetheredGift ? 1000 : 1) } })}
           />
           {isSimpleMedia && (Boolean(configuration.media.videoAssetId) || selectedRandomVideoIds().length > 0) && parameterBoolean("videoEnabled", false) && !parameterBoolean("videoLoop", false)
             ? <small>{t("A non-looping video plays until the video itself ends.")}</small>
@@ -936,6 +937,7 @@ function EffectDrawer(props: EffectDrawerProps): React.ReactElement {
             <NumberField label={t("Maximum accumulated gifts")} value={parameterNumber("maxObjects", 1000)} min={1} max={2000} onChange={(value) => patchParameter("maxObjects", value)} />
             <GiftPileOverridesEditor
               gifts={props.gifts}
+              assets={props.assets}
               value={configuration.visual.parameters.giftSizeOverridesJson}
               onChange={(value) => patchParameter("giftSizeOverridesJson", value)}
             />

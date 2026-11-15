@@ -1,7 +1,6 @@
 import type WebSocket from "ws";
 import type { OverlayId, OverlayStatus, ServerMessage } from "@obs-effect/shared-types";
 import type { OverlayRegistry } from "./overlayRegistry.js";
-import { overlayIds } from "./overlayTypes.js";
 
 interface OverlayConnectionState {
   clients: Set<WebSocket>;
@@ -25,14 +24,14 @@ export class OverlayConnectionManager {
 
   constructor(options: OverlayConnectionManagerOptions) {
     this.options = options;
-    for (const overlayId of overlayIds) {
+    for (const { overlayId } of options.registry.list()) {
       this.states.set(overlayId, { clients: new Set<WebSocket>() });
       this.recentEffectMessages.set(overlayId, []);
     }
   }
 
   addClient(overlayId: OverlayId, client: WebSocket): void {
-    const state = this.states.get(overlayId)!;
+    const state = this.ensureState(overlayId);
     const timestamp = new Date().toISOString();
     state.clients.add(client);
     state.connectedAt ??= timestamp;
@@ -47,7 +46,7 @@ export class OverlayConnectionManager {
   }
 
   removeClient(overlayId: OverlayId, client: WebSocket): void {
-    const state = this.states.get(overlayId)!;
+    const state = this.ensureState(overlayId);
     if (!state.clients.delete(client)) {
       return;
     }
@@ -61,21 +60,21 @@ export class OverlayConnectionManager {
   broadcastToOverlay(overlayId: OverlayId, message: ServerMessage): void {
     if (message.type === "effect:clear") this.forgetClearedEffects(overlayId, message.effectId);
     this.rememberRecentEffect(overlayId, message);
-    const state = this.states.get(overlayId)!;
+    const state = this.ensureState(overlayId);
     for (const client of state.clients) {
       this.options.send(client, message);
     }
   }
 
   broadcastToAll(message: ServerMessage): void {
-    for (const overlayId of overlayIds) {
+    for (const { overlayId } of this.options.registry.list()) {
       this.broadcastToOverlay(overlayId, message);
     }
   }
 
   statusList(): OverlayStatus[] {
     return this.options.registry.list().map((definition) => {
-      const state = this.states.get(definition.overlayId)!;
+      const state = this.ensureState(definition.overlayId);
       const url = `${this.options.publicBaseUrl()}/overlay/${definition.overlayId}`;
       return {
         ...definition,
@@ -109,7 +108,7 @@ export class OverlayConnectionManager {
     if (message.type !== "effect:play") return;
     const now = Date.now();
     const replayWindowMs = this.options.replayWindowMs ?? 5000;
-    const recent = this.recentEffectMessages.get(overlayId)!;
+    const recent = this.recentEffectMessages.get(overlayId) ?? [];
     recent.push({ message, storedAt: now });
     this.recentEffectMessages.set(
       overlayId,
@@ -124,7 +123,7 @@ export class OverlayConnectionManager {
     }
     this.recentEffectMessages.set(
       overlayId,
-      this.recentEffectMessages.get(overlayId)!.filter((entry) =>
+      (this.recentEffectMessages.get(overlayId) ?? []).filter((entry) =>
         entry.message.type !== "effect:play" || entry.message.effectId !== effectId
       )
     );
@@ -133,10 +132,20 @@ export class OverlayConnectionManager {
   private replayRecentEffects(overlayId: OverlayId, client: WebSocket): void {
     const now = Date.now();
     const replayWindowMs = this.options.replayWindowMs ?? 5000;
-    const recent = this.recentEffectMessages.get(overlayId)!.filter((entry) => now - entry.storedAt <= replayWindowMs);
+    const recent = (this.recentEffectMessages.get(overlayId) ?? []).filter((entry) => now - entry.storedAt <= replayWindowMs);
     this.recentEffectMessages.set(overlayId, recent);
     for (const entry of recent) {
       this.options.send(client, entry.message);
     }
+  }
+
+  private ensureState(overlayId: OverlayId): OverlayConnectionState {
+    let state = this.states.get(overlayId);
+    if (!state) {
+      state = { clients: new Set<WebSocket>() };
+      this.states.set(overlayId, state);
+      this.recentEffectMessages.set(overlayId, []);
+    }
+    return state;
   }
 }

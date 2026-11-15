@@ -9,6 +9,7 @@ import { ballRevealEffectDefinition } from "./builtins/ballReveal.js";
 import { chromaErasureEffectDefinition } from "./builtins/chromaErasure.js";
 
 import { giftPileEffectDefinition } from "./builtins/giftPile.js";
+import { tetheredGiftEffectDefinition } from "./builtins/tetheredGift.js";
 
 export const effectDefinitions: EffectDefinition[] = [
   flashEffectDefinition,
@@ -19,7 +20,8 @@ export const effectDefinitions: EffectDefinition[] = [
   pitchingMachineBallEffectDefinition,
   puyoGameEffectDefinition,
   giftComboTextEffectDefinition,
-  giftPileEffectDefinition
+  giftPileEffectDefinition,
+  tetheredGiftEffectDefinition
 ];
 
 export function findEffectDefinition(effectDefinitionId: string): EffectDefinition | undefined {

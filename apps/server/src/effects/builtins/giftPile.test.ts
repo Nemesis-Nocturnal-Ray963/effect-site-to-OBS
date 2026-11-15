@@ -4,7 +4,7 @@ import type {
   EffectPlayMessage,
   NormalizedEvent
 } from "@obs-effect/shared-types";
-import { GiftPileEffectService, resolveCoinImageUrl, resolveGiftObjectSize } from "./giftPile.js";
+import { GiftPileEffectService, resolveCoinImageUrl, resolveGiftObjectSize, resolveGiftPileImageUrl, resolveGiftSpecificImageUrl } from "./giftPile.js";
 
 const configuration = {
   id: "pile",
@@ -142,6 +142,31 @@ describe("gift pile delivery", () => {
     expect(
       resolveGiftObjectSize({ objectSizePx: 55, giftSizeOverridesJson: "invalid" }, unknown)
     ).toBe(55);
+  });
+
+  it("chooses a random image from the exact gift's image pool before broader image rules", () => {
+    const event = gift("gift", 1, "random-gift-image");
+    const parameters = {
+      giftSizeOverridesJson: JSON.stringify([{
+        giftId: "rose",
+        sizePx: 88,
+        useCustomImage: true,
+        imageUrls: ["/asset-files/rose-a.png", "/asset-files/rose-b.png", "/asset-files/rose-c.png"]
+      }]),
+      coinImageRulesJson: '[{"minCoinValue":0,"maxCoinValue":100,"imageUrl":"/asset-files/coin.png"}]'
+    };
+    event.data.coinValue = 1;
+    expect(resolveGiftSpecificImageUrl(parameters, event, () => 0)).toBe("/asset-files/rose-a.png");
+    expect(resolveGiftSpecificImageUrl(parameters, event, () => 0.99)).toBe("/asset-files/rose-c.png");
+    expect(resolveGiftPileImageUrl(parameters, event, "/asset-files/catalog.png")).toMatch(/^\/asset-files\/rose-[abc]\.png$/u);
+  });
+
+  it("supports a legacy single exact-gift image and ignores a disabled pool", () => {
+    const event = gift("gift", 1, "legacy-gift-image");
+    const legacy = { giftSizeOverridesJson: '[{"giftId":"rose","sizePx":88,"imageUrl":"/asset-files/legacy.png"}]' };
+    expect(resolveGiftSpecificImageUrl(legacy, event)).toBe("/asset-files/legacy.png");
+    const disabled = { giftSizeOverridesJson: '[{"giftId":"rose","sizePx":88,"useCustomImage":false,"imageUrls":["/asset-files/off.png"]}]' };
+    expect(resolveGiftSpecificImageUrl(disabled, event)).toBeUndefined();
   });
 
   it("uses the exact gift size before the broader coin-specific or default size", () => {

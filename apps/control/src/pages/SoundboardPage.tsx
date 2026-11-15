@@ -1,9 +1,10 @@
 import React from "react";
 import QRCode from "qrcode";
-import type { AssetCatalogItem, OverlayId, SoundboardBoard, SoundboardPad } from "@obs-effect/shared-types";
+import type { AssetCatalogItem, OverlayId, OverlayStatus, SoundboardBoard, SoundboardPad } from "@obs-effect/shared-types";
 import { SoundboardPadGrid } from "../components/SoundboardPadGrid";
 import {
   fetchAssets,
+  fetchOverlays,
   fetchSoundboard,
   playSoundboardPad,
   saveSoundboard,
@@ -13,6 +14,7 @@ import {
 export function SoundboardPage(): React.ReactElement {
   const [board, setBoard] = React.useState<SoundboardBoard | null>(null);
   const [assets, setAssets] = React.useState<AssetCatalogItem[]>([]);
+  const [overlays, setOverlays] = React.useState<OverlayStatus[]>([]);
   const [token, setToken] = React.useState("");
   const [remoteUrl, setRemoteUrl] = React.useState("");
   const [selectedPadId, setSelectedPadId] = React.useState<string | null>(null);
@@ -30,8 +32,8 @@ export function SoundboardPage(): React.ReactElement {
   }) : "", [board]);
 
   React.useEffect(() => {
-    void Promise.all([fetchSoundboard(), fetchAssets()])
-      .then(([config, nextAssets]) => {
+    void Promise.all([fetchSoundboard(), fetchAssets(), fetchOverlays()])
+      .then(([config, nextAssets, nextOverlays]) => {
         savedBoardSignature.current = JSON.stringify({
           id: config.board.id,
           name: config.board.name,
@@ -43,6 +45,7 @@ export function SoundboardPage(): React.ReactElement {
         setRemoteUrl(config.remoteUrl);
         setSelectedPadId(config.board.pads[0]?.id ?? null);
         setAssets(nextAssets);
+        setOverlays(nextOverlays);
         setMessage("");
       })
       .catch(() => setMessage("ポン出し設定を読み込めませんでした。"));
@@ -244,7 +247,7 @@ export function SoundboardPage(): React.ReactElement {
               <label>
                 対象Overlay
                 <select value={selectedPad.targetOverlayId} onChange={(event) => updatePad({ targetOverlayId: Number(event.target.value) as OverlayId })}>
-                  {Array.from({ length: 10 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>Overlay {value}</option>)}
+                  {overlays.map((overlay) => <option key={overlay.overlayId} value={overlay.overlayId}>{overlay.name}</option>)}
                 </select>
               </label>
               <label>表示時間（秒）<input type="number" min="0.1" max="3600" step="0.1" value={selectedPad.durationMs / 1000} onChange={(event) => updatePad({ durationMs: Math.max(100, Number(event.target.value) * 1000) })} /></label>

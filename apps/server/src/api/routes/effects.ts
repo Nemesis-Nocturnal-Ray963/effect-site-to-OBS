@@ -4,6 +4,7 @@ import { effectDefinitions } from "../../effects/effectDefinitions.js";
 import { effectMessageFromConfiguration, type EffectConfigurationInput, type EffectConfigurationService } from "../../effects/EffectConfigurationService.js";
 import type { OverlayConnectionManager } from "../../overlays/overlayConnectionManager.js";
 import type { EffectConfiguration, NormalizedEvent, ResolvedEffectMedia, RuntimeEffectObject } from "@obs-effect/shared-types";
+import { MAX_OVERLAY_COUNT } from "../../overlays/overlayTypes.js";
 
 const effectTestSchema = z.object({
   pitchingScenario: z.enum(["manual", "same-listener-gifts", "multiple-listener-gifts", "new-listener-gift"]).optional(),
@@ -20,7 +21,7 @@ const configurationSchema = z.object({
   description: z.string().optional(),
   effectDefinitionId: z.string().optional(),
   enabled: z.boolean().optional(),
-  targetOverlayId: z.number().int().min(1).max(10).optional(),
+  targetOverlayId: z.number().int().min(1).max(MAX_OVERLAY_COUNT).optional(),
   trigger: z
     .object({
       mode: z.enum(["all", "any"]),

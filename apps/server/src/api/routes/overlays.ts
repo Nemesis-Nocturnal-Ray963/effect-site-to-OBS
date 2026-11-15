@@ -20,9 +20,19 @@ export async function registerOverlayRoutes(
 ): Promise<void> {
   app.get("/api/v1/overlays", async () => ({ overlays: manager.statusList() }));
 
+  app.post("/api/v1/overlays", async (_request, reply) => {
+    const config = await configurationRepository.create(now());
+    if (!config) return reply.code(409).send({ error: "Overlay limit reached" });
+    registry.applyConfiguration(config);
+    return reply.code(201).send({
+      config,
+      overlay: manager.statusList().find((item) => item.overlayId === config.overlayId)
+    });
+  });
+
   app.get("/api/v1/overlays/:overlayId", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) {
+    if (!overlayId || !registry.has(overlayId)) {
       return reply.code(404).send({ error: "Overlay not found" });
     }
     return { overlay: manager.statusList().find((item) => item.overlayId === overlayId) };
@@ -30,7 +40,7 @@ export async function registerOverlayRoutes(
 
   app.get("/api/v1/overlays/:overlayId/config", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) {
+    if (!overlayId || !registry.has(overlayId)) {
       return reply.code(404).send({ error: "Overlay not found" });
     }
     return { config: await configurationRepository.get(overlayId) };
@@ -38,7 +48,7 @@ export async function registerOverlayRoutes(
 
   app.patch("/api/v1/overlays/:overlayId/config", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) {
+    if (!overlayId || !registry.has(overlayId)) {
       return reply.code(404).send({ error: "Overlay not found" });
     }
     const parsed = overlayConfigPatchSchema.safeParse(request.body ?? {});
@@ -52,7 +62,7 @@ export async function registerOverlayRoutes(
 
   app.post("/api/v1/overlays/:overlayId/test", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) {
+    if (!overlayId || !registry.has(overlayId)) {
       return reply.code(404).send({ accepted: false, error: "Overlay not found" });
     }
 

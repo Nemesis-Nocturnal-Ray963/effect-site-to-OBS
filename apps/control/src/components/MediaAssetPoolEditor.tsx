@@ -27,7 +27,13 @@ export function MediaAssetPoolEditor(props: {
         </div>
         <div className="media-pool-add">
           <select value={pendingId} onChange={(event) => setPendingId(event.target.value)}>
-            <option value="">{kinds.length === 1 && kinds[0] === "video" ? t("Choose video") : t("Choose image or video")}</option>
+            <option value="">
+              {kinds.length === 1
+                ? kinds[0] === "video"
+                  ? t("Choose video")
+                  : t("Choose image")
+                : t("Choose image or video")}
+            </option>
             {remaining.map((asset) => (
               <option key={asset.id} value={asset.id}>{asset.name} ({asset.kind})</option>
             ))}

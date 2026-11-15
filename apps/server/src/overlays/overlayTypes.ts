@@ -1,10 +1,14 @@
 import type { OverlayId } from "@obs-effect/shared-types";
 
-export const overlayIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const satisfies readonly OverlayId[];
+export const INITIAL_OVERLAY_COUNT = 10;
+export const MAX_OVERLAY_COUNT = 64;
+export const overlayIds = Array.from({ length: INITIAL_OVERLAY_COUNT }, (_, index) => index + 1) as OverlayId[];
 
 export function parseOverlayId(value: unknown): OverlayId | null {
   const parsed = typeof value === "number" ? value : Number(value);
-  return overlayIds.includes(parsed as OverlayId) ? (parsed as OverlayId) : null;
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= MAX_OVERLAY_COUNT
+    ? (parsed as OverlayId)
+    : null;
 }
 
 export function defaultOverlayId(value: unknown): OverlayId {

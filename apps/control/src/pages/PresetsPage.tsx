@@ -456,6 +456,7 @@ function SlotEditor(props: {
   const isBallReveal = props.slot.effectDefinitionId === "ball-reveal";
   const isGiftComboText = props.slot.effectDefinitionId === "gift-combo-text";
   const isGiftPile = props.slot.effectDefinitionId === "gift-pile";
+  const isTetheredGift = props.slot.effectDefinitionId === "tethered-gift";
   const isChromaErasure = props.slot.effectDefinitionId === "chroma-erasure";
   const isSimpleMedia = props.slot.effectDefinitionId === "simple-media";
   const hasMediaSettings = Boolean(definition?.supportsImage || definition?.supportsVideo || definition?.supportsAudio || isBallReveal || isPitchingMachineBall);
@@ -704,13 +705,13 @@ function SlotEditor(props: {
 
       <PresetSettingsSection index="3" title={t("Playback and layout")} description={t("Control timing, layering, size, and placement.")}>
         <NumberField
-          label={isGiftPile ? t("Gift display time (seconds)") : t("Duration ms")}
-          value={isGiftPile ? props.slot.playback.durationMs / 1000 : props.slot.playback.durationMs}
-          min={isGiftPile ? 1 : 50}
-          max={isGiftPile ? 600 : undefined}
-          step={isGiftPile ? 1 : 50}
+          label={isGiftPile ? t("Gift display time (seconds)") : isTetheredGift ? t("Display time (seconds)") : t("Duration ms")}
+          value={isGiftPile || isTetheredGift ? props.slot.playback.durationMs / 1000 : props.slot.playback.durationMs}
+          min={isGiftPile ? 1 : isTetheredGift ? 0.5 : 50}
+          max={isGiftPile || isTetheredGift ? 600 : undefined}
+          step={isGiftPile ? 1 : isTetheredGift ? 0.5 : 50}
           disabled={isSimpleMedia && (Boolean(props.slot.media.videoAssetId) || Boolean(String(props.slot.visual.parameters.videoAssetIdsCsv ?? "").trim())) && props.slot.visual.parameters.videoEnabled === true && props.slot.visual.parameters.videoLoop !== true}
-          onChange={(value) => props.onPatch({ playback: { durationMs: isGiftPile ? value * 1000 : value } })}
+          onChange={(value) => props.onPatch({ playback: { durationMs: isGiftPile || isTetheredGift ? value * 1000 : value } })}
         />
         <NumberField
           label={t("Start delay ms")}
@@ -971,6 +972,7 @@ function SlotEditor(props: {
             <>
               <GiftPileOverridesEditor
                 gifts={props.gifts}
+                assets={props.assets}
                 value={props.slot.visual.parameters.giftSizeOverridesJson}
                 onChange={(value) => patchParameter("giftSizeOverridesJson", value)}
               />
@@ -1316,10 +1318,10 @@ function normalizePresetEffectTrigger(effectDefinitionId: string, trigger: Effec
   if (trigger && hasTikTokGiftCondition) return trigger;
   return {
     mode: "any",
-    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile", "chroma-erasure"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
+    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile", "tethered-gift", "chroma-erasure"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
   };
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string | undefined): boolean {
-  return !!effectDefinitionId && ["flash", "simple-media", "ball-reveal", "chroma-erasure", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
+  return !!effectDefinitionId && ["flash", "simple-media", "ball-reveal", "chroma-erasure", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile", "tethered-gift"].includes(effectDefinitionId);
 }

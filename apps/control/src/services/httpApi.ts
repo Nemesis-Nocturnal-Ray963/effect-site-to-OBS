@@ -440,6 +440,13 @@ export async function fetchOverlays(): Promise<OverlayStatus[]> {
   return data.overlays;
 }
 
+export async function createOverlay(): Promise<OverlayStatus> {
+  const response = await fetch("/api/v1/overlays", { method: "POST" });
+  const data = (await response.json()) as { overlay?: OverlayStatus; error?: string };
+  if (!response.ok || !data.overlay) throw new Error(data.error ?? "Failed to create overlay");
+  return data.overlay;
+}
+
 export interface SystemVersionInfo {
   appVersion: string;
   buildVersion: string;

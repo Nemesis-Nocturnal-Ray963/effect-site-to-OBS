@@ -1,8 +1,10 @@
 ﻿import path from "node:path";
 import { createReadStream } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import os from "node:os";
+import { readFile } from "node:fs/promises";
 import Fastify from "fastify";
+import type { FastifyReply } from "fastify";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import { z } from "zod";
@@ -36,7 +38,7 @@ import { TikTokConnectionManager } from "./tiktok/TikTokConnectionManager.js";
 import { registerTikTokRoutes } from "./api/routes/tiktok.js";
 import { OverlayRegistry } from "./overlays/overlayRegistry.js";
 import { OverlayConnectionManager } from "./overlays/overlayConnectionManager.js";
-import { defaultOverlayId, parseOverlayId } from "./overlays/overlayTypes.js";
+import { defaultOverlayId, MAX_OVERLAY_COUNT, parseOverlayId } from "./overlays/overlayTypes.js";
 import { registerOverlayRoutes } from "./api/routes/overlays.js";
 import { registerSoundboardRoutes } from "./api/routes/soundboard.js";
 import { SoundboardRepository } from "./soundboard/SoundboardRepository.js";
@@ -49,6 +51,7 @@ import { FallingImageEffectService } from "./effects/builtins/fallingImage.js";
 import { GiftComboTextEffectService } from "./effects/builtins/giftComboText.js";
 import { PitchingMachineBallEffectService } from "./effects/builtins/pitchingMachineBall.js";
 import { GiftPileEffectService, resolveGiftPileImageUrl } from "./effects/builtins/giftPile.js";
+import { TetheredGiftEffectService } from "./effects/builtins/tetheredGift.js";
 import { PuyoGameEffectService } from "./effects/builtins/puyoGame.js";
 import { registerEffectRoutes } from "./api/routes/effects.js";
 import { TikTokRawEventStore } from "./tiktok/raw-capture/TikTokRawEventStore.js";
@@ -70,7 +73,7 @@ import { PresetService } from "./presets/PresetService.js";
 import { registerPresetRoutes } from "./api/routes/presets.js";
 import { registerSystemFontRoutes } from "./api/routes/systemFonts.js";
 import { registerGameIntegrationRoutes } from "./api/routes/gameIntegrations.js";
-import { appVersion, buildVersion, overlayBundleVersion, serverInstanceId } from "./version/buildVersion.js";
+import { appVersion, buildVersion, overlayBundleVersion as configuredOverlayBundleVersion, serverInstanceId } from "./version/buildVersion.js";
 
 interface CreateAppOptions {
   rootDir: string;
@@ -82,7 +85,7 @@ interface CreateAppOptions {
 
 const playSchema = z.object({
   instanceId: z.string().optional(),
-  targetOverlayId: z.number().int().min(1).max(10).optional(),
+  targetOverlayId: z.number().int().min(1).max(MAX_OVERLAY_COUNT).optional(),
   parameters: z.record(z.unknown()).optional()
 });
 
@@ -121,6 +124,8 @@ export async function createApp(options: CreateAppOptions) {
   const port = options.port ?? 3190;
   const soundboardRemotePort = options.soundboardRemotePort ?? port + 1;
   const startedAt = Date.now();
+  const overlayDocument = await loadOverlayDocument(rootDir, configuredOverlayBundleVersion);
+  const currentOverlayBundleVersion = overlayDocument.version;
   let apiConfig = loadApiConfig(rootDir);
 
   const app = Fastify({
@@ -192,6 +197,7 @@ export async function createApp(options: CreateAppOptions) {
   let pitchingMachineBallEffectService: PitchingMachineBallEffectService | null = null;
   let giftComboTextEffectService: GiftComboTextEffectService | null = null;
   let giftPileEffectService: GiftPileEffectService | null = null;
+  let tetheredGiftEffectService: TetheredGiftEffectService | null = null;
   let puyoGameEffectService: PuyoGameEffectService | null = null;
   let simpleMediaQueueService: SimpleMediaQueueService;
 
@@ -374,6 +380,7 @@ export async function createApp(options: CreateAppOptions) {
   pitchingMachineBallEffectService = new PitchingMachineBallEffectService(rootDir, runtimeInteractionService);
   giftComboTextEffectService = new GiftComboTextEffectService(rootDir, runtimeInteractionService, broadcastToControl);
   giftPileEffectService = new GiftPileEffectService((overlayId, message) => overlayConnectionManager.broadcastToOverlay(overlayId, message));
+  tetheredGiftEffectService = new TetheredGiftEffectService((overlayId, message) => overlayConnectionManager.broadcastToOverlay(overlayId, message));
   puyoGameEffectService = new PuyoGameEffectService(runtimeInteractionService);
   timeTriggerService = new TimeTriggerService(rootDir, () => now(), {
     onFired: executeTimeTrigger,
@@ -413,6 +420,10 @@ export async function createApp(options: CreateAppOptions) {
     }
     if (configuration.effectDefinitionId === "gift-pile" && giftPileEffectService) {
       await executeGiftPile(configuration, event);
+      return;
+    }
+    if (configuration.effectDefinitionId === "tethered-gift" && tetheredGiftEffectService) {
+      await executeTetheredGift(configuration, event);
       return;
     }
     if (configuration.effectDefinitionId === "falling-image" && fallingImageEffectService) {
@@ -476,6 +487,16 @@ export async function createApp(options: CreateAppOptions) {
     const localImage = source && source === gift?.image.primaryUrl
       ? await resolveCatalogImage(gift) : await giftImageCache.resolve(source);
     return giftPileEffectService!.execute(resolved, resolvedEvent, undefined, localImage ?? null);
+  }
+
+  async function executeTetheredGift(configuration: Awaited<ReturnType<EffectConfigurationService["list"]>>[number], event?: NormalizedEvent) {
+    const resolved = await effectConfigurationService.resolveGifts(configuration);
+    const gift = await giftCatalogService.findForEvent(event);
+    const source = resolveGiftPileImageUrl({}, event, gift?.image.primaryUrl);
+    const localImage = source && source === gift?.image.primaryUrl
+      ? await resolveCatalogImage(gift)
+      : await giftImageCache.resolve(source);
+    return tetheredGiftEffectService!.execute(resolved, event, localImage ?? null);
   }
 
   async function executeTimeTrigger(trigger: TimeTrigger, event: NormalizedEvent): Promise<unknown[]> {
@@ -571,13 +592,13 @@ export async function createApp(options: CreateAppOptions) {
       overlayConnectionManager.broadcastToOverlay(overlayId, {
         type: "overlay:version",
         overlayId,
-        buildVersion,
+        buildVersion: currentOverlayBundleVersion,
         overlayConfigVersion,
         runtimeStateVersion: runtimeInteractionService.stateVersion(overlayId),
         serverInstanceId,
         createdAt: now()
       });
-      if (message.currentBuildVersion !== buildVersion) {
+      if (message.currentBuildVersion !== currentOverlayBundleVersion) {
         overlayConnectionManager.broadcastToOverlay(overlayId, overlayReloadMessage(overlayId, "build-version-changed", message.currentBuildVersion));
       }
     } else if (message.type === "interaction:session-start") {
@@ -610,7 +631,7 @@ export async function createApp(options: CreateAppOptions) {
       overlayId,
       reason,
       currentBuildVersion,
-      newBuildVersion: buildVersion,
+      newBuildVersion: currentOverlayBundleVersion,
       reloadDelayMs: 500,
       createdAt: now()
     };
@@ -841,18 +862,18 @@ export async function createApp(options: CreateAppOptions) {
       buildVersion,
       serverStartedAt: new Date(startedAt).toISOString(),
       serverInstanceId,
-      overlayBundleVersion
+      overlayBundleVersion: currentOverlayBundleVersion
     };
   });
 
   app.get("/api/v1/overlays/:overlayId/version", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) return reply.code(404).send({ error: "Overlay not found" });
+    if (!overlayId || !overlayRegistry.has(overlayId)) return reply.code(404).send({ error: "Overlay not found" });
     const config = await overlayConfigurationRepository.get(overlayId);
     reply.header("Cache-Control", "no-store");
     return {
       overlayId,
-      buildVersion,
+      buildVersion: currentOverlayBundleVersion,
       overlayConfigVersion: overlayConfigurationVersion(config.updatedAt),
       runtimeStateVersion: runtimeInteractionService.stateVersion(overlayId),
       serverInstanceId
@@ -861,13 +882,13 @@ export async function createApp(options: CreateAppOptions) {
 
   app.post("/api/v1/overlays/:overlayId/reload", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) return reply.code(404).send({ accepted: false, error: "Overlay not found" });
+    if (!overlayId || !overlayRegistry.has(overlayId)) return reply.code(404).send({ accepted: false, error: "Overlay not found" });
     overlayConnectionManager.broadcastToOverlay(overlayId, overlayReloadMessage(overlayId, "manual-control-ui"));
     return { accepted: true, overlayId };
   });
 
   app.post("/api/v1/overlays/reload-all", async () => {
-    for (const overlayId of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as OverlayId[]) {
+    for (const { overlayId } of overlayRegistry.list()) {
       overlayConnectionManager.broadcastToOverlay(overlayId, overlayReloadMessage(overlayId, "manual-control-ui"));
     }
     return { accepted: true };
@@ -973,7 +994,7 @@ export async function createApp(options: CreateAppOptions) {
   await registerRuntimeRoutes(app, runtimeInteractionService);
   app.delete("/api/v1/overlays/:overlayId/gift-pile", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId: string }).overlayId);
-    if (!overlayId) return reply.code(404).send({ error: "Overlay not found" });
+    if (!overlayId || !overlayRegistry.has(overlayId)) return reply.code(404).send({ error: "Overlay not found" });
     giftPileEffectService!.clear(overlayId);
     return { cleared: true, overlayId };
   });
@@ -1008,7 +1029,7 @@ export async function createApp(options: CreateAppOptions) {
 
   app.get("/ws/overlay/:overlayId", { websocket: true }, (socket, request) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) {
+    if (!overlayId || !overlayRegistry.has(overlayId)) {
       socket.close(1008, "Invalid overlay id");
       return;
     }
@@ -1126,31 +1147,54 @@ export async function createApp(options: CreateAppOptions) {
     reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/control/dist/index.html")))
   );
 
-  app.get("/overlay", async (_request, reply) =>
-    reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")))
-  );
+  const serveOverlayDocument = (reply: FastifyReply) => {
+    reply
+      .header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
+      .header("Pragma", "no-cache")
+      .header("Expires", "0")
+      .type("text/html");
+    return overlayDocument.html
+      ? reply.send(overlayDocument.html)
+      : reply.send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")));
+  };
+
+  app.get("/overlay", async (_request, reply) => serveOverlayDocument(reply));
 
   app.get("/overlay/:overlayId", async (request, reply) => {
     const overlayId = parseOverlayId((request.params as { overlayId?: string }).overlayId);
-    if (!overlayId) {
+    if (!overlayId || !overlayRegistry.has(overlayId)) {
       return reply.code(404).send("Overlay not found");
     }
-    return reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")));
+    return serveOverlayDocument(reply);
   });
 
-  app.get("/game", async (_request, reply) =>
-    reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")))
-  );
+  app.get("/game", async (_request, reply) => serveOverlayDocument(reply));
 
-  app.get("/game/*", async (_request, reply) =>
-    reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/overlay/dist/index.html")))
-  );
+  app.get("/game/*", async (_request, reply) => serveOverlayDocument(reply));
 
   app.get("/control/*", async (_request, reply) =>
     reply.type("text/html").send(createReadStream(path.join(rootDir, "apps/control/dist/index.html")))
   );
 
   return app;
+}
+
+async function loadOverlayDocument(
+  rootDir: string,
+  fallbackVersion: string
+): Promise<{ html?: string; version: string }> {
+  try {
+    const html = await readFile(path.join(rootDir, "apps/overlay/dist/index.html"), "utf8");
+    const version = createHash("sha256").update(html).digest("hex").slice(0, 16);
+    const versioned = html.replace(
+      /<head(\s[^>]*)?>/iu,
+      (head) => `${head}<meta name="obs-effect-overlay-version" content="${version}">`
+    );
+    return { html: versioned, version };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: fallbackVersion };
+    throw error;
+  }
 }
 
 function imageUrlFromEvent(parameters: Record<string, unknown>, event?: NormalizedEvent): string | undefined {

@@ -20,11 +20,15 @@ import {
   type PuyoPair
 } from "./puyoEngine";
 import { GiftPileLayer, type GiftPileHandle } from "./GiftPileLayer";
+import { TetheredGiftLayer, type TetheredGiftHandle } from "./TetheredGiftLayer";
 import { ChromaErasureLayer, type ChromaErasurePlayback } from "./ChromaErasureLayer";
 import defaultBallRevealUrl from "./assets/ball-reveal-default.png";
 import "./styles.css";
 
-const CURRENT_BUILD_VERSION = ((import.meta as ImportMeta & { env?: { VITE_BUILD_VERSION?: string } }).env?.VITE_BUILD_VERSION) ?? "dev";
+const CURRENT_BUILD_VERSION =
+  document.querySelector<HTMLMetaElement>('meta[name="obs-effect-overlay-version"]')?.content ||
+  ((import.meta as ImportMeta & { env?: { VITE_BUILD_VERSION?: string } }).env?.VITE_BUILD_VERSION) ||
+  new URL(import.meta.url).pathname;
 const RELOAD_STORAGE_KEY = "obs-effect-overlay-reload-state";
 const MAX_RELOADS_PER_MINUTE = 3;
 
@@ -81,7 +85,7 @@ function makeWsUrl(path: string): string {
 function getOverlayId(): number {
   const match = window.location.pathname.match(/^\/overlay\/(\d+)$/);
   const parsed = match ? Number(match[1]) : 1;
-  return parsed >= 1 && parsed <= 10 ? parsed : 1;
+  return parsed >= 1 && parsed <= 64 ? parsed : 1;
 }
 
 function sendOverlayHello(socket: WebSocket | null, overlayId: number): void {
@@ -108,11 +112,12 @@ function sendSocketMessage(socket: WebSocket | null, message: unknown): void {
 }
 
 function scheduleOverlayReload(newBuildVersion: string, reloadDelayMs: number, reason: string): void {
-  if (!newBuildVersion || newBuildVersion === CURRENT_BUILD_VERSION) return;
+  const forced = reason === "manual-control-ui";
+  if (!newBuildVersion || (!forced && newBuildVersion === CURRENT_BUILD_VERSION)) return;
   const state = readReloadState();
   const now = Date.now();
   const recent = state.reloadTimestamps.filter((timestamp) => now - timestamp < 60_000);
-  if (state.lastReloadedBuildVersion === newBuildVersion || recent.length >= MAX_RELOADS_PER_MINUTE) {
+  if ((!forced && state.lastReloadedBuildVersion === newBuildVersion) || recent.length >= MAX_RELOADS_PER_MINUTE) {
     writeReloadState({ ...state, reloadTimestamps: recent, reloadFailureCount: state.reloadFailureCount + 1 });
     return;
   }
@@ -122,7 +127,12 @@ function scheduleOverlayReload(newBuildVersion: string, reloadDelayMs: number, r
     reloadTimestamps: [...recent, now],
     reloadFailureCount: state.reloadFailureCount
   });
-  window.setTimeout(() => window.location.reload(), Math.max(0, reloadDelayMs));
+  window.setTimeout(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("__overlay_v", newBuildVersion);
+    url.searchParams.set("__overlay_reload", String(now));
+    window.location.replace(url.toString());
+  }, Math.max(0, reloadDelayMs));
 }
 
 function readReloadState(): {
@@ -800,6 +810,7 @@ function createStandalonePuyoObject(): RuntimeEffectObject {
 
 function OverlayApp(): React.ReactElement {
   const giftPileRef = React.useRef<GiftPileHandle>(null);
+  const tetheredGiftRef = React.useRef<TetheredGiftHandle>(null);
   const socketRef = React.useRef<WebSocket | null>(null);
   const [flashes, setFlashes] = React.useState<Flash[]>([]);
   const [simpleMedia, setSimpleMedia] = React.useState<SimpleMediaPlayback[]>([]);
@@ -861,6 +872,7 @@ function OverlayApp(): React.ReactElement {
     function handleMessage(event: MessageEvent): void {
       const message = JSON.parse(event.data as string) as ServerMessage;
       if (message.type === "effect:clear") {
+        if (!message.effectId || message.effectId === "tethered-gift") tetheredGiftRef.current?.clear();
         setChromaErasures([]);
         setSimpleMedia((current) => {
           for (const item of current) {
@@ -875,6 +887,8 @@ function OverlayApp(): React.ReactElement {
         });
       } else if (message.type === "effect:play" && message.effectId === "gift-pile") {
         giftPileRef.current?.receive(message);
+      } else if (message.type === "effect:play" && message.effectId === "tethered-gift") {
+        tetheredGiftRef.current?.receive(message);
       } else if (message.type === "effect:play" && message.effectId === "flash") {
         const play = message as EffectPlayMessage;
         const color = typeof play.parameters?.color === "string" ? play.parameters.color : "#ffffff";
@@ -982,6 +996,7 @@ function OverlayApp(): React.ReactElement {
       ) : null}
       {chromaErasures.map((item) => <ChromaErasureLayer key={item.key} item={item} />)}
       <GiftPileLayer ref={giftPileRef} />
+      <TetheredGiftLayer ref={tetheredGiftRef} />
       <FallingImagePhysicsLayer objects={(snapshot?.objects ?? []).filter(isRenderableFallingImage)} />
       <PitchingMachineLayer objects={(snapshot?.objects ?? []).filter(isRenderablePitchingObject)} />
       <PuyoGameLayer objects={(snapshot?.objects ?? []).filter(isRenderablePuyoGame)} />

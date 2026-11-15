@@ -354,13 +354,13 @@ function presetRuntimeTrigger(effectDefinitionId: string, trigger: EffectTrigger
 }
 
 function usesTikTokGiftTrigger(effectDefinitionId: string): boolean {
-  return ["flash", "simple-media", "ball-reveal", "chroma-erasure", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile"].includes(effectDefinitionId);
+  return ["flash", "simple-media", "ball-reveal", "chroma-erasure", "gift-combo-text", "pitching-machine-ball", "falling-image", "puyo-game", "gift-pile", "tethered-gift"].includes(effectDefinitionId);
 }
 
 function defaultTikTokGiftTrigger(effectDefinitionId: string): EffectTriggerGroup {
   return {
     mode: "any",
-    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile", "chroma-erasure"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
+    conditions: [{ type: "gift-any", triggerOn: ["gift-combo-text", "gift-pile", "tethered-gift", "chroma-erasure"].includes(effectDefinitionId ?? "") ? "gift" : "streak-end" }]
   };
 }
 
@@ -381,7 +381,7 @@ function runtimeGiftMatch(
   event: NormalizedEvent
 ): { trigger: EffectTriggerGroup; event: NormalizedEvent } | null {
   const isStreakProgress = event.type === "gift-streak-start" || event.type === "gift-streak-update";
-  if (configuration.effectDefinitionId === "gift-pile" && isStreakProgress) {
+  if (["gift-pile", "tethered-gift"].includes(configuration.effectDefinitionId) && isStreakProgress) {
     return { trigger: configuration.trigger, event: { ...event, type: "gift" } };
   }
   if (configuration.effectDefinitionId !== "simple-media") {

@@ -162,7 +162,43 @@ export class GiftPileEffectService {
 export function resolveGiftPileImageUrl(parameters: Record<string, unknown>, event?: NormalizedEvent, catalogImageUrl?: string): string | undefined {
   const urls = [event?.data.primaryGiftImageUrl, ...(Array.isArray(event?.data.giftImageUrls) ? event.data.giftImageUrls : [])];
   const eventImageUrl = urls.find((url): url is string => typeof url === "string" && /^(https?:\/\/|\/(?!\/))/u.test(url));
-  return resolveCoinImageUrl(parameters, event) ?? validImageUrl(catalogImageUrl) ?? eventImageUrl;
+  return resolveGiftSpecificImageUrl(parameters, event) ?? resolveCoinImageUrl(parameters, event) ?? validImageUrl(catalogImageUrl) ?? eventImageUrl;
+}
+
+export function resolveGiftSpecificImageUrl(
+  parameters: Record<string, unknown>,
+  event?: NormalizedEvent,
+  random: () => number = Math.random
+): string | undefined {
+  if (!event || typeof parameters.giftSizeOverridesJson !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(parameters.giftSizeOverridesJson) as unknown;
+    if (!Array.isArray(parsed)) return undefined;
+    const match = parsed.find(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        (item as Record<string, unknown>).useCustomImage !== false &&
+        giftMatches(
+          event,
+          String((item as Record<string, unknown>).giftId ?? ""),
+          typeof (item as Record<string, unknown>).giftName === "string"
+            ? (item as { giftName: string }).giftName
+            : undefined
+        )
+    ) as Record<string, unknown> | undefined;
+    if (!match) return undefined;
+    const imageUrls = Array.isArray(match.imageUrls)
+      ? match.imageUrls.filter((url): url is string => validImageUrl(url) !== undefined)
+      : [];
+    const legacyImage = validImageUrl(match.imageUrl);
+    const candidates = imageUrls.length > 0 ? imageUrls : legacyImage ? [legacyImage] : [];
+    if (candidates.length === 0) return undefined;
+    const index = Math.min(candidates.length - 1, Math.max(0, Math.floor(random() * candidates.length)));
+    return candidates[index];
+  } catch {
+    return undefined;
+  }
 }
 
 export function resolveCoinImageUrl(

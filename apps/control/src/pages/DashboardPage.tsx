@@ -66,7 +66,7 @@ export function DashboardPage(): React.ReactElement {
       <section className="metric-grid">
         <div className="panel metric-card">
           <span>{t("Overlays in use")}</span>
-          <strong>{overlays.filter((overlay) => overlay.isInUse).length} / 10</strong>
+          <strong>{overlays.filter((overlay) => overlay.isInUse).length} / {overlays.length}</strong>
         </div>
         <div className="panel metric-card">
           <span>{t("Overlay clients")}</span>

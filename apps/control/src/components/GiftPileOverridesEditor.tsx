@@ -1,16 +1,21 @@
 import React from "react";
-import type { GiftCatalogRecord } from "@obs-effect/shared-types";
+import type { AssetCatalogItem, GiftCatalogRecord } from "@obs-effect/shared-types";
 import { giftImageSrc } from "../services/giftImages";
 import { useI18n } from "../i18n/I18nProvider";
+import { MediaAssetPoolEditor } from "./MediaAssetPoolEditor";
 
 interface GiftSizeOverride {
   giftId: string;
   giftName?: string;
   sizePx: number;
+  useCustomImage: boolean;
+  assetIds: string[];
+  imageUrls: string[];
 }
 
 export function GiftPileOverridesEditor(props: {
   gifts: GiftCatalogRecord[];
+  assets: AssetCatalogItem[];
   value: unknown;
   onChange: (value: string) => Promise<void>;
 }): React.ReactElement {
@@ -57,15 +62,17 @@ export function GiftPileOverridesEditor(props: {
       });
   }, [minimumCoin, overrides, pickerGiftId, props.gifts, search, sort]);
 
-  function save(next: GiftSizeOverride[]): void {
-    void props.onChange(JSON.stringify(next));
+  function save(next: GiftSizeOverride[]): Promise<void> {
+    return props.onChange(JSON.stringify(next));
   }
 
   return (
     <section className="gift-pile-overrides gift-size-overrides">
-      <div>
-        <strong>{t("Gift-specific sizes")}</strong>
-        <p className="empty-text">{t("Override the default object size for selected gifts.")}</p>
+      <div className="gift-random-image-intro">
+        <strong>{t("Gift-specific random images")}</strong>
+        <p className="empty-text">
+          {t("Choose a gift and register multiple images. One image is selected at random each time that gift appears on the overlay.")}
+        </p>
       </div>
       {overrides.map((override, index) => {
         const gift = props.gifts.find((item) => item.platformGiftId === override.giftId);
@@ -88,18 +95,53 @@ export function GiftPileOverridesEditor(props: {
               <DeferredSizeInput
                 value={override.sizePx}
                 onCommit={(value) =>
-                  save(overrides.map((item, itemIndex) =>
+                  void save(overrides.map((item, itemIndex) =>
                     itemIndex === index ? { ...item, sizePx: clampSize(value) } : item
                   ))
                 }
               />
             </label>
-            <button
+            <button className="gift-rule-delete"
               type="button"
-              onClick={() => save(overrides.filter((_, itemIndex) => itemIndex !== index))}
+              onClick={() => void save(overrides.filter((_, itemIndex) => itemIndex !== index))}
             >
               {t("Delete")}
             </button>
+            <div className="gift-rule-image-settings">
+              <strong>{t("Random image display")}</strong>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={override.useCustomImage}
+                  onChange={(event) => void save(overrides.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, useCustomImage: event.target.checked } : item
+                  ))}
+                />
+                {t("Show a random registered image for this gift")}
+              </label>
+              {override.useCustomImage ? (
+                <MediaAssetPoolEditor
+                  assets={props.assets}
+                  kinds={["image"]}
+                  selectedIds={override.assetIds}
+                  title={t("Images displayed at random")}
+                  summary={`${override.assetIds.length} ${t("images / one is chosen at random per gift")}`}
+                  emptyMessage={t("Add images to randomly choose one for this gift.")}
+                  onChange={(assetIds) => save(overrides.map((item, itemIndex) =>
+                    itemIndex === index
+                      ? {
+                          ...item,
+                          assetIds,
+                          imageUrls: assetIds.flatMap((assetId) => {
+                            const asset = props.assets.find((candidate) => candidate.id === assetId && candidate.kind === "image");
+                            return asset ? [asset.contentUrl] : [];
+                          })
+                        }
+                      : item
+                  ))}
+                />
+              ) : null}
+            </div>
           </div>
         );
       })}
@@ -108,10 +150,21 @@ export function GiftPileOverridesEditor(props: {
         disabled={available.length === 0}
         onClick={() => {
           const gift = available[0];
-          if (gift) save([...overrides, { giftId: gift.platformGiftId, giftName: gift.matchName ?? gift.name, sizePx: 88 }]);
+          if (gift) {
+            const nextIndex = overrides.length;
+            void save([...overrides, {
+              giftId: gift.platformGiftId,
+              giftName: gift.matchName ?? gift.name,
+              sizePx: 88,
+              useCustomImage: true,
+              assetIds: [],
+              imageUrls: []
+            }]);
+            setPickerIndex(nextIndex);
+          }
         }}
       >
-        {t("Add gift size rule")}
+        {t("Add gift random image setting")}
       </button>
       {props.gifts.length === 0 ? (
         <p className="empty-text">{t("No gifts recorded yet.")}</p>
@@ -179,7 +232,7 @@ export function GiftPileOverridesEditor(props: {
                     type="button"
                     className={`preset-gift-tile ${gift.platformGiftId === pickerGiftId ? "selected" : ""}`}
                     onClick={() => {
-                      save(
+                      void save(
                         overrides.map((item, itemIndex) =>
                           itemIndex === pickerIndex
                             ? { ...item, giftId: gift.platformGiftId, giftName: gift.matchName ?? gift.name }
@@ -224,7 +277,22 @@ export function parseGiftSizeOverrides(value: unknown): GiftSizeOverride[] {
       const giftId = typeof candidate.giftId === "string" ? candidate.giftId.trim() : "";
       if (!giftId || typeof candidate.sizePx !== "number" || !Number.isFinite(candidate.sizePx))
         continue;
-      unique.set(giftId, { giftId, giftName: typeof candidate.giftName === "string" ? candidate.giftName : undefined, sizePx: clampSize(candidate.sizePx) });
+      const assetIds = Array.isArray(candidate.assetIds)
+        ? candidate.assetIds.filter((value): value is string => typeof value === "string" && value.length > 0)
+        : typeof candidate.assetId === "string" && candidate.assetId ? [candidate.assetId] : [];
+      const imageUrls = Array.isArray(candidate.imageUrls)
+        ? candidate.imageUrls.filter((value): value is string => typeof value === "string" && value.length > 0)
+        : typeof candidate.imageUrl === "string" && candidate.imageUrl ? [candidate.imageUrl] : [];
+      unique.set(giftId, {
+        giftId,
+        giftName: typeof candidate.giftName === "string" ? candidate.giftName : undefined,
+        sizePx: clampSize(candidate.sizePx),
+        useCustomImage: typeof candidate.useCustomImage === "boolean"
+          ? candidate.useCustomImage
+          : assetIds.length > 0 || imageUrls.length > 0,
+        assetIds,
+        imageUrls
+      });
     }
     return [...unique.values()];
   } catch {

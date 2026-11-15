@@ -1,7 +1,7 @@
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { OverlayConfiguration, OverlayId } from "@obs-effect/shared-types";
-import { overlayIds } from "./overlayTypes.js";
+import { MAX_OVERLAY_COUNT, overlayIds, parseOverlayId } from "./overlayTypes.js";
 
 interface OverlayConfigurationFile {
   overlays: OverlayConfiguration[];
@@ -15,8 +15,15 @@ export class OverlayConfigurationJsonRepository {
   }
 
   async list(): Promise<OverlayConfiguration[]> {
-    const stored = new Map((await this.read()).overlays.map((overlay) => [overlay.overlayId, overlay]));
-    return overlayIds.map((overlayId) => stored.get(overlayId) ?? defaultOverlayConfiguration(overlayId));
+    const stored = new Map(
+      (await this.read()).overlays
+        .filter((overlay) => parseOverlayId(overlay.overlayId) !== null)
+        .map((overlay) => [overlay.overlayId, overlay])
+    );
+    for (const overlayId of overlayIds) {
+      if (!stored.has(overlayId)) stored.set(overlayId, defaultOverlayConfiguration(overlayId));
+    }
+    return [...stored.values()].sort((left, right) => left.overlayId - right.overlayId);
   }
 
   async get(overlayId: OverlayId): Promise<OverlayConfiguration> {
@@ -45,6 +52,18 @@ export class OverlayConfigurationJsonRepository {
     overlays[index] = updated;
     await this.saveAll(overlays);
     return updated;
+  }
+
+  async create(now: string): Promise<OverlayConfiguration | null> {
+    const overlays = await this.list();
+    const used = new Set(overlays.map((overlay) => overlay.overlayId));
+    let overlayId = 1;
+    while (used.has(overlayId) && overlayId <= MAX_OVERLAY_COUNT) overlayId += 1;
+    if (overlayId > MAX_OVERLAY_COUNT) return null;
+    const created = { ...defaultOverlayConfiguration(overlayId), updatedAt: now };
+    overlays.push(created);
+    await this.saveAll(overlays.sort((left, right) => left.overlayId - right.overlayId));
+    return created;
   }
 
   private async saveAll(overlays: OverlayConfiguration[]): Promise<void> {

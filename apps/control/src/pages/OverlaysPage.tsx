@@ -2,7 +2,7 @@
 import { Link } from "react-router-dom";
 import type { OverlayId, OverlayStatus } from "@obs-effect/shared-types";
 import { useI18n } from "../i18n/I18nProvider";
-import { fetchOverlays, fetchSystemVersion, reloadAllOverlays, reloadOverlay, testOverlayFlash, updateOverlayConfig, type SystemVersionInfo } from "../services/httpApi";
+import { createOverlay, fetchOverlays, fetchSystemVersion, reloadAllOverlays, reloadOverlay, testOverlayFlash, updateOverlayConfig, type SystemVersionInfo } from "../services/httpApi";
 import { useConnectionStore } from "../stores/connectionStore";
 
 function overlayOptionLabel(overlay: OverlayStatus): string {
@@ -15,6 +15,7 @@ export function OverlaysPage(): React.ReactElement {
   const hydrateOverlays = useConnectionStore((state) => state.hydrateOverlays);
   const [message, setMessage] = React.useState("");
   const [version, setVersion] = React.useState<SystemVersionInfo | null>(null);
+  const [adding, setAdding] = React.useState(false);
 
   React.useEffect(() => {
     void Promise.all([fetchOverlays(), fetchSystemVersion()])
@@ -45,6 +46,19 @@ export function OverlaysPage(): React.ReactElement {
     setMessage(t("Reload requested for all overlays"));
   }
 
+  async function addOverlay(): Promise<void> {
+    setAdding(true);
+    try {
+      const created = await createOverlay();
+      hydrateOverlays(await fetchOverlays());
+      setMessage(`${t("Overlay added")}: ${t("Overlay")} ${created.overlayId}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t("Could not add overlay"));
+    } finally {
+      setAdding(false);
+    }
+  }
+
   async function saveOverlay(
     overlay: OverlayStatus,
     patch: Partial<Pick<OverlayStatus, "name" | "width" | "height" | "fps">>
@@ -57,7 +71,7 @@ export function OverlaysPage(): React.ReactElement {
 
   return (
     <section className="page-stack">
-      <div className="page-heading">
+      <div className="page-heading overlay-page-heading">
         <div>
           <p className="eyebrow">{t("Effects")}</p>
           <h2>{t("Overlay Management")}</h2>
@@ -67,16 +81,28 @@ export function OverlaysPage(): React.ReactElement {
             </p>
           ) : null}
         </div>
-        <button type="button" onClick={() => void requestReloadAll()}>
-          {t("Reload all overlays")}
-        </button>
+        <div className="overlay-heading-actions">
+          <button type="button" className="primary-button" disabled={adding || overlays.length >= 64} onClick={() => void addOverlay()}>
+            {adding ? t("Adding...") : t("+ Add overlay")}
+          </button>
+          <button type="button" onClick={() => void requestReloadAll()}>{t("Reload all overlays")}</button>
+        </div>
       </div>
 
-      <div className="table-meta">
-        <span>
-          {overlays.filter((overlay) => overlay.isInUse).length} / 10 {t("in use")}
-        </span>
-        <span>{message}</span>
+      <section className="overlay-summary-grid">
+        <div className="overlay-summary-card"><span>{t("Registered")}</span><strong>{overlays.length}</strong></div>
+        <div className="overlay-summary-card active"><span>{t("In use")}</span><strong>{overlays.filter((overlay) => overlay.isInUse).length}</strong></div>
+        <div className="overlay-summary-card"><span>{t("Connected clients")}</span><strong>{overlays.reduce((sum, overlay) => sum + overlay.connectedClients, 0)}</strong></div>
+      </section>
+
+      <aside className="overlay-performance-note">
+        <strong>{t("Performance note")}</strong>
+        <p>{t("Adding an overlay setting has almost no performance cost. CPU, GPU, and memory usage increase when the overlay is actually opened in OBS or a browser, especially at high resolution, high FPS, or with many simultaneous effects.")}</p>
+      </aside>
+
+      <div className="table-meta overlay-page-meta">
+        <span>{t("Up to 64 overlays can be registered.")}</span>
+        <span role="status">{message}</span>
       </div>
 
       <section className="overlay-grid">
@@ -94,22 +120,16 @@ export function OverlaysPage(): React.ReactElement {
               </span>
             </div>
 
-            <dl className="detail-list">
-              <dt>URL</dt>
-              <dd>{overlay.url}</dd>
-              <dt>{t("clients")}</dt>
-              <dd>{overlay.connectedClients}</dd>
-              <dt>{t("resolution")}</dt>
-              <dd>
-                {overlay.width} x {overlay.height}
-              </dd>
-              <dt>fps</dt>
-              <dd>{overlay.fps}</dd>
-              <dt>{t("last connected")}</dt>
-              <dd>{overlay.lastConnectedAt ? new Date(overlay.lastConnectedAt).toLocaleTimeString() : "-"}</dd>
-              <dt>{t("last disconnected")}</dt>
-              <dd>{overlay.lastDisconnectedAt ? new Date(overlay.lastDisconnectedAt).toLocaleTimeString() : "-"}</dd>
-            </dl>
+            <div className="overlay-facts">
+              <span><strong>{overlay.connectedClients}</strong>{t("clients")}</span>
+              <span><strong>{overlay.width} × {overlay.height}</strong>{t("resolution")}</span>
+              <span><strong>{overlay.fps}</strong>FPS</span>
+            </div>
+
+            <div className="overlay-url-row">
+              <code title={overlay.url}>{overlay.url}</code>
+              <button type="button" onClick={() => void copyUrl(overlay.url)}>{t("Copy URL")}</button>
+            </div>
 
             <div className="button-row">
               <button type="button" onClick={() => void saveOverlay(overlay, { width: 1920, height: 1080, fps: 60 })}>
@@ -117,9 +137,6 @@ export function OverlaysPage(): React.ReactElement {
               </button>
               <button type="button" onClick={() => void saveOverlay(overlay, { width: 1080, height: 1920, fps: 60 })}>
                 9:16
-              </button>
-              <button type="button" onClick={() => void copyUrl(overlay.url)}>
-                {t("Copy URL")}
               </button>
               <button type="button" onClick={() => void testFlash(overlay.overlayId)}>
                 {t("Test Flash")}
@@ -131,7 +148,9 @@ export function OverlaysPage(): React.ReactElement {
                 {t("Interact")}
               </Link>
             </div>
-            <div className="overlay-config-form">
+            <details className="overlay-settings">
+              <summary>{t("Display settings")}</summary>
+              <div className="overlay-config-form">
               <label>
                 {t("Name")}
                 <input defaultValue={overlay.name} onBlur={(event) => void saveOverlay(overlay, { name: event.target.value })} />
@@ -166,10 +185,14 @@ export function OverlaysPage(): React.ReactElement {
                   onBlur={(event) => void saveOverlay(overlay, { fps: Number(event.target.value) })}
                 />
               </label>
-            </div>
-            <p className="empty-text">
-              {t("OBS browser source note")} {overlay.width} x {overlay.height}, FPS {overlay.fps}.
-            </p>
+              </div>
+              <p className="empty-text">{t("OBS browser source note")} {overlay.width} x {overlay.height}, FPS {overlay.fps}.</p>
+              <p className="overlay-connection-history">
+                {t("last connected")}: {overlay.lastConnectedAt ? new Date(overlay.lastConnectedAt).toLocaleTimeString() : "-"}
+                <span> / </span>
+                {t("last disconnected")}: {overlay.lastDisconnectedAt ? new Date(overlay.lastDisconnectedAt).toLocaleTimeString() : "-"}
+              </p>
+            </details>
           </article>
         ))}
       </section>

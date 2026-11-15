@@ -23,6 +23,10 @@ export class OverlayRegistry {
     return this.definitions.get(overlayId)!;
   }
 
+  has(overlayId: OverlayId): boolean {
+    return this.definitions.has(overlayId);
+  }
+
   applyConfigurations(configurations: OverlayConfiguration[]): void {
     for (const configuration of configurations) {
       this.definitions.set(configuration.overlayId, toDefinition(configuration));

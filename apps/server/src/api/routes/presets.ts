@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { PresetService, PresetInput, PresetSlotInput } from "../../presets/PresetService.js";
 import type { EffectConfigurationService } from "../../effects/EffectConfigurationService.js";
 import type { EffectConfiguration, NormalizedEvent } from "@obs-effect/shared-types";
+import { MAX_OVERLAY_COUNT } from "../../overlays/overlayTypes.js";
 
 const presetTestSchema = z.object({
   gift: z.object({
@@ -24,7 +25,7 @@ const slotSchema = z.object({
   description: z.string().optional(),
   effectDefinitionId: z.string().optional(),
   enabled: z.boolean().optional(),
-  targetOverlayId: z.number().int().min(1).max(10).optional(),
+  targetOverlayId: z.number().int().min(1).max(MAX_OVERLAY_COUNT).optional(),
   trigger: z
     .object({
       mode: z.enum(["all", "any"]),
